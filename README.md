@@ -21,6 +21,9 @@ Covers everything: wallet management, staking, transfers, subnet operations, wei
 | **Key Swaps** | Hotkey swap, coldkey swap (scheduled) |
 | **Root** | Root registration, root weights |
 | **Raw Calls** | Submit to any pallet via dynamic dispatch (EVM, MEV Shield, Contracts) |
+| **Config** | Persistent settings (`~/.agcli/config.toml`), set/unset/show config values |
+| **Proxy** | Wrap any extrinsic through Proxy.proxy for delegated signing |
+| **Wizard** | Interactive staking wizard — shows top subnets, guided flow |
 | **Output** | Table (default), JSON (`--output json`), CSV (`--output csv`) |
 
 ## Quick Start
@@ -99,6 +102,20 @@ agcli identity set-subnet 1 --name "My Subnet" --github "user/repo"
 
 # Query on-chain identity
 agcli identity show 5GrwvaEF5zXb...
+
+# Interactive staking wizard
+agcli stake wizard
+
+# Configuration (persistent to ~/.agcli/config.toml)
+agcli config set network finney
+agcli config set wallet my_wallet
+agcli config set output json
+agcli config show
+agcli config unset output
+agcli config path
+
+# Proxy — execute through a proxy account
+agcli --proxy 5ProxyAccount... stake add 10 --netuid 1
 ```
 
 ### SDK Usage (as library)
@@ -151,7 +168,8 @@ async fn main() -> anyhow::Result<()> {
 ```
 agcli/
 ├── src/
-│   ├── lib.rs           # Library root, re-exports Client/Wallet/Balance
+│   ├── config.rs        # Persistent config file (~/.agcli/config.toml)
+│   ├── lib.rs           # Library root, re-exports Client/Wallet/Balance/Config
 │   ├── main.rs          # CLI entry point
 │   ├── chain/           # Substrate client (subxt-based)
 │   │   ├── mod.rs         # Client: 35+ queries + 30+ extrinsics + sign_submit helper

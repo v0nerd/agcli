@@ -5,6 +5,16 @@
 Staking in Bittensor means locking TAO tokens on a subnet to support validators/miners.
 With Dynamic TAO, each subnet has its own alpha token — when you stake, you buy alpha.
 
+## Staking Wizard (Interactive)
+
+The quickest way to start staking:
+
+```bash
+agcli stake wizard
+```
+
+The wizard shows your balance, lists top subnets by pool size, lets you pick a subnet and amount, and confirms before submitting.
+
 ## Basic Staking
 
 ```bash

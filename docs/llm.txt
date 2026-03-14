@@ -88,6 +88,21 @@ cargo install --git https://github.com/unconst/agcli
 - Supports `--output json` for structured event streaming
 - Filter categories: all, staking, registration, transfer, weights, subnet
 
+### Configuration
+- `agcli config show` — show current config
+- `agcli config set KEY VALUE` — set: network, endpoint, wallet_dir, wallet, hotkey, output, proxy, live_interval
+- `agcli config unset KEY` — remove a setting
+- `agcli config path` — show config file path (~/.agcli/config.toml)
+- Priority: CLI flags > env vars > config file > defaults
+
+### Proxy
+- `agcli --proxy SS58 <command>` — wrap any extrinsic through Proxy.proxy for delegated signing
+- SDK: `client.proxy_call(&pair, "real_ss58", "Pallet", "call", fields).await?`
+
+### Staking Wizard
+- `agcli stake wizard` — interactive guided staking flow
+- Shows balance, top subnets by pool, lets you pick subnet/amount, confirms before submitting
+
 ### Raw Calls (Advanced)
 - SDK method: `client.submit_raw_call(&pair, "PalletName", "call_name", fields)`
 - Enables calling any pallet (EVM, MEVShield, Contracts) without compile-time bindings
@@ -104,7 +119,7 @@ agcli --output json stake list
 
 ## SDK Usage
 ```rust
-use agcli::{Client, Wallet, Balance};
+use agcli::{Client, Config, Wallet, Balance};
 
 let client = Client::connect("wss://entrypoint-finney.opentensor.ai:443").await?;
 let balance = client.get_balance_ss58("5Gx...").await?;
@@ -122,6 +137,11 @@ agcli::events::subscribe_events(client.inner_client(), EventFilter::All, false).
 // Raw call to any pallet (EVM, MEVShield, etc.)
 use subxt::dynamic::Value;
 client.submit_raw_call(&pair, "EVM", "associate_evm_key", vec![...]).await?;
+// Proxy call (delegate signing through proxy account)
+client.proxy_call(&pair, "5RealAccount...", "SubtensorModule", "add_stake", vec![...]).await?;
+// Load persistent config
+let cfg = Config::load();
+println!("Network: {:?}", cfg.network);
 ```
 
 ## Key Concepts

@@ -53,16 +53,39 @@ agcli stake list
 agcli transfer 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY 1.5
 ```
 
+## 7. Interactive Staking Wizard
+
+```bash
+# Guided staking flow — shows subnets, lets you pick, confirms before submitting
+agcli stake wizard
+```
+
 ## Configuration
 
-Set defaults via environment variables:
+### Persistent config file (recommended)
+```bash
+# Set defaults once — persisted to ~/.agcli/config.toml
+agcli config set network finney
+agcli config set wallet my_wallet
+agcli config set output json
+
+# View current config
+agcli config show
+
+# Remove a setting
+agcli config unset output
+```
+
+### Environment variables
 ```bash
 export AGCLI_NETWORK=finney
 export AGCLI_WALLET=my_wallet
 export AGCLI_WALLET_DIR=~/.bittensor/wallets
 ```
 
-Or pass them as CLI flags:
+### CLI flags (override everything)
 ```bash
 agcli --network test --wallet my_wallet subnet list
 ```
+
+Priority: CLI flags > environment variables > config file > defaults

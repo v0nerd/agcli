@@ -20,6 +20,7 @@
 //! ```
 
 pub mod chain;
+pub mod config;
 pub mod events;
 pub mod extrinsics;
 pub mod live;
@@ -50,5 +51,6 @@ pub type Hash = <SubtensorConfig as subxt::Config>::Hash;
 
 // Re-exports for ergonomic SDK use
 pub use chain::Client;
+pub use config::Config;
 pub use types::balance::Balance;
 pub use wallet::Wallet;

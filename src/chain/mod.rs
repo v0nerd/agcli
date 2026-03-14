@@ -489,6 +489,31 @@ impl Client {
         &self.inner
     }
 
+    // ──────── Proxy Support ────────
+
+    /// Submit an extrinsic through a proxy account using dynamic dispatch.
+    /// `real_ss58` is the proxied account. `pair` is the proxy signer.
+    /// `pallet`, `call`, and `fields` describe the inner call.
+    pub async fn proxy_call(&self, pair: &sr25519::Pair, real_ss58: &str, pallet: &str, call: &str, fields: Vec<subxt::dynamic::Value>) -> Result<String> {
+        use subxt::dynamic::Value;
+        let real_id = Self::ss58_to_account_id(real_ss58)?;
+        let inner_call = Value::named_composite([
+            ("pallet", Value::string(pallet)),
+            ("call", Value::string(call)),
+            ("fields", Value::unnamed_composite(fields)),
+        ]);
+        let proxy_tx = subxt::dynamic::tx(
+            "Proxy",
+            "proxy",
+            vec![
+                Value::unnamed_variant("Id", [Value::from_bytes(real_id.0)]),
+                Value::unnamed_variant("None", []),
+                inner_call,
+            ],
+        );
+        self.sign_submit(&proxy_tx, pair).await
+    }
+
     // ──────── Raw Dynamic Extrinsic Submission ────────
 
     /// Submit a raw SCALE-encoded call via dynamic dispatch (for pallets not in compile-time metadata).

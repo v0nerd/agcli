@@ -37,6 +37,10 @@ pub struct Cli {
     #[arg(long)]
     pub live: Option<Option<u64>>,
 
+    /// Proxy account SS58 — wrap all extrinsics through Proxy.proxy
+    #[arg(long, env = "AGCLI_PROXY")]
+    pub proxy: Option<String>,
+
     #[command(subcommand)]
     pub command: Commands,
 }
@@ -109,6 +113,11 @@ pub enum Commands {
     /// Subscribe to real-time chain events
     #[command(subcommand)]
     Subscribe(SubscribeCommands),
+
+    // ──── Config ────
+    /// Manage persistent configuration (~/.agcli/config.toml)
+    #[command(subcommand)]
+    Config(ConfigCommands),
 }
 
 #[derive(Subcommand, Debug)]
@@ -479,7 +488,63 @@ pub enum SwapCommands {
     },
 }
 
+#[derive(Subcommand, Debug)]
+pub enum ConfigCommands {
+    /// Show current configuration
+    Show,
+    /// Set a config value (e.g., agcli config set network finney)
+    Set {
+        /// Key to set
+        key: String,
+        /// Value to set
+        value: String,
+    },
+    /// Remove a config value
+    Unset {
+        /// Key to remove
+        key: String,
+    },
+    /// Show config file path
+    Path,
+}
+
 impl Cli {
+    /// Apply config file defaults to CLI args (CLI flags take precedence).
+    pub fn apply_config(&mut self, cfg: &crate::config::Config) {
+        // Only apply config if CLI still has the clap default
+        if self.network == "finney" {
+            if let Some(ref n) = cfg.network {
+                self.network = n.clone();
+            }
+        }
+        if self.endpoint.is_none() {
+            self.endpoint = cfg.endpoint.clone();
+        }
+        if self.wallet_dir == "~/.bittensor/wallets" {
+            if let Some(ref d) = cfg.wallet_dir {
+                self.wallet_dir = d.clone();
+            }
+        }
+        if self.wallet == "default" {
+            if let Some(ref w) = cfg.wallet {
+                self.wallet = w.clone();
+            }
+        }
+        if self.hotkey == "default" {
+            if let Some(ref h) = cfg.hotkey {
+                self.hotkey = h.clone();
+            }
+        }
+        if self.output == "table" {
+            if let Some(ref o) = cfg.output {
+                self.output = o.clone();
+            }
+        }
+        if self.proxy.is_none() {
+            self.proxy = cfg.proxy.clone();
+        }
+    }
+
     /// Get live polling interval (None = not live, Some(secs) = live mode).
     pub fn live_interval(&self) -> Option<u64> {
         self.live.map(|opt| opt.unwrap_or(12))

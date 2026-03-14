@@ -78,6 +78,7 @@ pub async fn execute(cli: Cli) -> Result<()> {
             let client = Client::connect(network.ws_url()).await?;
             handle_subscribe(cmd, &client, output).await
         }
+        Commands::Config(cmd) => handle_config(cmd).await,
     }
 }
 
@@ -540,9 +541,7 @@ async fn handle_stake(
             Ok(())
         }
         StakeCommands::Wizard => {
-            println!("Interactive staking wizard not yet implemented.");
-            println!("Use 'agcli stake add' or 'agcli stake remove' for now.");
-            Ok(())
+            staking_wizard(client, wallet_dir, wallet_name, hotkey_name).await
         }
     }
 }
@@ -635,70 +634,34 @@ async fn handle_subnet(
                     println!("Hyperparameters for SN{}", netuid);
                     let mut table = comfy_table::Table::new();
                     table.set_header(vec!["Parameter", "Value"]);
-                    table.add_row(vec!["rho", &format!("{}", h.rho)]);
-                    table.add_row(vec!["kappa", &format!("{}", h.kappa)]);
-                    table.add_row(vec!["immunity_period", &format!("{}", h.immunity_period)]);
-                    table.add_row(vec![
-                        "min_allowed_weights",
-                        &format!("{}", h.min_allowed_weights),
-                    ]);
-                    table.add_row(vec![
-                        "max_weights_limit",
-                        &format!("{}", h.max_weights_limit),
-                    ]);
-                    table.add_row(vec!["tempo", &format!("{}", h.tempo)]);
-                    table.add_row(vec!["min_difficulty", &format!("{}", h.min_difficulty)]);
-                    table.add_row(vec!["max_difficulty", &format!("{}", h.max_difficulty)]);
-                    table.add_row(vec!["weights_version", &format!("{}", h.weights_version)]);
-                    table.add_row(vec![
-                        "weights_rate_limit",
-                        &format!("{}", h.weights_rate_limit),
-                    ]);
-                    table.add_row(vec![
-                        "adjustment_interval",
-                        &format!("{}", h.adjustment_interval),
-                    ]);
-                    table.add_row(vec!["activity_cutoff", &format!("{}", h.activity_cutoff)]);
-                    table.add_row(vec![
-                        "registration_allowed",
-                        &format!("{}", h.registration_allowed),
-                    ]);
-                    table.add_row(vec![
-                        "target_regs_per_interval",
-                        &format!("{}", h.target_regs_per_interval),
-                    ]);
-                    table.add_row(vec!["min_burn", &h.min_burn.display_tao()]);
-                    table.add_row(vec!["max_burn", &h.max_burn.display_tao()]);
-                    table.add_row(vec![
-                        "bonds_moving_avg",
-                        &format!("{}", h.bonds_moving_avg),
-                    ]);
-                    table.add_row(vec![
-                        "max_regs_per_block",
-                        &format!("{}", h.max_regs_per_block),
-                    ]);
-                    table.add_row(vec![
-                        "serving_rate_limit",
-                        &format!("{}", h.serving_rate_limit),
-                    ]);
-                    table.add_row(vec!["max_validators", &format!("{}", h.max_validators)]);
-                    table.add_row(vec![
-                        "adjustment_alpha",
-                        &format!("{}", h.adjustment_alpha),
-                    ]);
-                    table.add_row(vec!["difficulty", &format!("{}", h.difficulty)]);
-                    table.add_row(vec![
-                        "commit_reveal_weights",
-                        &format!("{}", h.commit_reveal_weights_enabled),
-                    ]);
-                    table.add_row(vec![
-                        "commit_reveal_interval",
-                        &format!("{}", h.commit_reveal_weights_interval),
-                    ]);
-                    table.add_row(vec![
-                        "liquid_alpha_enabled",
-                        &format!("{}", h.liquid_alpha_enabled),
-                    ]);
+                    let rows: Vec<(&str, String)> = vec![
+                        ("rho", format!("{}", h.rho)),
+                        ("kappa", format!("{}", h.kappa)),
+                        ("immunity_period", format!("{}", h.immunity_period)),
+                        ("min_allowed_weights", format!("{}", h.min_allowed_weights)),
+                        ("max_weights_limit", format!("{}", h.max_weights_limit)),
+                        ("tempo", format!("{}", h.tempo)),
+                        ("min_difficulty", format!("{}", h.min_difficulty)),
+                        ("max_difficulty", format!("{}", h.max_difficulty)),
+                        ("weights_version", format!("{}", h.weights_version)),
+                        ("weights_rate_limit", format!("{}", h.weights_rate_limit)),
+                        ("adjustment_interval", format!("{}", h.adjustment_interval)),
+                        ("activity_cutoff", format!("{}", h.activity_cutoff)),
+                        ("registration_allowed", format!("{}", h.registration_allowed)),
+                        ("target_regs_per_interval", format!("{}", h.target_regs_per_interval)),
+                        ("min_burn", h.min_burn.display_tao()),
+                        ("max_burn", h.max_burn.display_tao()),
+                        ("bonds_moving_avg", format!("{}", h.bonds_moving_avg)),
+                        ("max_regs_per_block", format!("{}", h.max_regs_per_block)),
+                        ("serving_rate_limit", format!("{}", h.serving_rate_limit)),
+                        ("max_validators", format!("{}", h.max_validators)),
+                        ("adjustment_alpha", format!("{}", h.adjustment_alpha)),
+                        ("difficulty", format!("{}", h.difficulty)),
+                        ("commit_reveal_weights", format!("{}", h.commit_reveal_weights_enabled)),
+                        ("commit_reveal_interval", format!("{}", h.commit_reveal_weights_interval)),
+                        ("liquid_alpha_enabled", format!("{}", h.liquid_alpha_enabled)),
+                    ];
+                    for (k, v) in &rows { table.add_row(vec![k, v.as_str()]); }
                     println!("{table}");
                 }
                 None => println!("Hyperparameters not found for SN{}.", netuid),
@@ -1382,4 +1345,180 @@ async fn handle_subscribe(
             crate::events::subscribe_events(client.inner_client(), f, json).await
         }
     }
+}
+
+// ──────── Config ────────
+
+async fn handle_config(cmd: ConfigCommands) -> Result<()> {
+    match cmd {
+        ConfigCommands::Show => {
+            let cfg = crate::config::Config::load();
+            let s = toml::to_string_pretty(&cfg)?;
+            if s.trim().is_empty() {
+                println!("No configuration set. Use 'agcli config set <key> <value>' to configure.");
+            } else {
+                println!("{}", s);
+            }
+            Ok(())
+        }
+        ConfigCommands::Set { key, value } => {
+            let mut cfg = crate::config::Config::load();
+            match key.as_str() {
+                "network" => cfg.network = Some(value),
+                "endpoint" => cfg.endpoint = Some(value),
+                "wallet_dir" => cfg.wallet_dir = Some(value),
+                "wallet" => cfg.wallet = Some(value),
+                "hotkey" => cfg.hotkey = Some(value),
+                "output" => {
+                    if !["table", "json", "csv"].contains(&value.as_str()) {
+                        anyhow::bail!("Invalid output format '{}'. Must be: table, json, csv", value);
+                    }
+                    cfg.output = Some(value);
+                }
+                "proxy" => cfg.proxy = Some(value),
+                "live_interval" => {
+                    let v: u64 = value.parse().map_err(|_| anyhow::anyhow!("Invalid interval '{}'", value))?;
+                    cfg.live_interval = Some(v);
+                }
+                _ => anyhow::bail!("Unknown config key '{}'. Valid keys: network, endpoint, wallet_dir, wallet, hotkey, output, proxy, live_interval", key),
+            }
+            cfg.save()?;
+            println!("Set {} = {}", key, cfg_value_display(&key, &cfg));
+            Ok(())
+        }
+        ConfigCommands::Unset { key } => {
+            let mut cfg = crate::config::Config::load();
+            match key.as_str() {
+                "network" => cfg.network = None,
+                "endpoint" => cfg.endpoint = None,
+                "wallet_dir" => cfg.wallet_dir = None,
+                "wallet" => cfg.wallet = None,
+                "hotkey" => cfg.hotkey = None,
+                "output" => cfg.output = None,
+                "proxy" => cfg.proxy = None,
+                "live_interval" => cfg.live_interval = None,
+                _ => anyhow::bail!("Unknown config key '{}'", key),
+            }
+            cfg.save()?;
+            println!("Unset {}", key);
+            Ok(())
+        }
+        ConfigCommands::Path => {
+            println!("{}", crate::config::Config::default_path().display());
+            Ok(())
+        }
+    }
+}
+
+fn cfg_value_display(key: &str, cfg: &crate::config::Config) -> String {
+    match key {
+        "network" => cfg.network.clone().unwrap_or_default(),
+        "endpoint" => cfg.endpoint.clone().unwrap_or_default(),
+        "wallet_dir" => cfg.wallet_dir.clone().unwrap_or_default(),
+        "wallet" => cfg.wallet.clone().unwrap_or_default(),
+        "hotkey" => cfg.hotkey.clone().unwrap_or_default(),
+        "output" => cfg.output.clone().unwrap_or_default(),
+        "proxy" => cfg.proxy.clone().unwrap_or_default(),
+        "live_interval" => cfg.live_interval.map(|v| v.to_string()).unwrap_or_default(),
+        _ => String::new(),
+    }
+}
+
+// ──────── Staking Wizard ────────
+
+async fn staking_wizard(
+    client: &Client,
+    wallet_dir: &str,
+    wallet_name: &str,
+    hotkey_name: &str,
+) -> Result<()> {
+    println!("=== Staking Wizard ===\n");
+
+    // Step 1: Open wallet
+    let mut wallet = open_wallet(wallet_dir, wallet_name)?;
+    let coldkey_ss58 = wallet
+        .coldkey_ss58()
+        .map(|s| s.to_string())
+        .unwrap_or_default();
+    println!("Wallet: {} ({})", wallet_name, crate::utils::short_ss58(&coldkey_ss58));
+
+    // Step 2: Show balance
+    let balance = client.get_balance_ss58(&coldkey_ss58).await?;
+    println!("Balance: {}\n", balance.display_tao());
+
+    if balance.rao() == 0 {
+        println!("You need TAO to stake. Transfer some TAO to your coldkey first.");
+        return Ok(());
+    }
+
+    // Step 3: Show top subnets by TAO pool
+    println!("Fetching subnet data...");
+    let dynamic = client.get_all_dynamic_info().await?;
+    let mut subnets_with_pool: Vec<_> = dynamic.iter()
+        .filter(|d| d.tao_in.rao() > 0)
+        .collect();
+    subnets_with_pool.sort_by(|a, b| b.tao_in.rao().cmp(&a.tao_in.rao()));
+
+    println!("\nTop subnets by TAO pool:");
+    let display_count = subnets_with_pool.len().min(15);
+    for (i, d) in subnets_with_pool.iter().take(display_count).enumerate() {
+        println!(
+            "  {:>2}. SN{:<3} {:<20} price={:.6} τ/α  pool={:.2} τ",
+            i + 1,
+            d.netuid,
+            &d.name,
+            d.price,
+            d.tao_in.tao(),
+        );
+    }
+
+    // Step 4: Ask which subnet
+    let netuid_input: String = dialoguer::Input::new()
+        .with_prompt("\nEnter subnet netuid to stake on")
+        .interact_text()?;
+    let netuid: u16 = netuid_input.trim().parse()
+        .map_err(|_| anyhow::anyhow!("Invalid netuid"))?;
+
+    // Step 5: Ask amount
+    let max_tao = balance.tao();
+    let amount_input: String = dialoguer::Input::new()
+        .with_prompt(&format!("Amount of TAO to stake (max {:.4})", max_tao))
+        .interact_text()?;
+    let amount: f64 = amount_input.trim().parse()
+        .map_err(|_| anyhow::anyhow!("Invalid amount"))?;
+
+    if amount <= 0.0 || amount > max_tao {
+        anyhow::bail!("Amount must be between 0 and {:.4}", max_tao);
+    }
+
+    // Step 6: Resolve hotkey
+    let hotkey_ss58 = resolve_hotkey_ss58(None, &mut wallet, hotkey_name)?;
+    println!("\nStaking {:.4} τ on SN{} with hotkey {}", amount, netuid, crate::utils::short_ss58(&hotkey_ss58));
+
+    // Step 7: Confirm
+    let confirm = dialoguer::Confirm::new()
+        .with_prompt("Proceed?")
+        .default(true)
+        .interact()?;
+
+    if !confirm {
+        println!("Cancelled.");
+        return Ok(());
+    }
+
+    // Step 8: Unlock and submit
+    unlock_coldkey(&mut wallet)?;
+    let stake_balance = Balance::from_tao(amount);
+    let hash = client
+        .add_stake(wallet.coldkey()?, &hotkey_ss58, NetUid(netuid), stake_balance)
+        .await?;
+    println!("Stake added! Tx: {}", hash);
+
+    // Step 9: Show updated portfolio
+    println!("\nUpdated portfolio:");
+    let portfolio = crate::queries::portfolio::fetch_portfolio(client, &coldkey_ss58).await?;
+    println!("  Free:   {}", portfolio.free_balance.display_tao());
+    println!("  Staked: {}", portfolio.total_staked.display_tao());
+
+    Ok(())
 }
