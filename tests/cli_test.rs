@@ -1907,3 +1907,129 @@ fn parse_explain_axon() {
     let cli = agcli::cli::Cli::try_parse_from(["agcli", "explain", "--topic", "axon"]);
     assert!(cli.is_ok());
 }
+
+#[test]
+fn parse_explain_take() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "explain", "--topic", "take"]);
+    assert!(cli.is_ok());
+}
+
+#[test]
+fn parse_explain_recycle() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "explain", "--topic", "recycle"]);
+    assert!(cli.is_ok());
+}
+
+#[test]
+fn parse_explain_pow() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "explain", "--topic", "pow"]);
+    assert!(cli.is_ok());
+}
+
+// ──── Step 34 — archive & block commands ────
+
+#[test]
+fn parse_network_archive() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "--network", "archive", "balance"]);
+    assert!(cli.is_ok());
+    assert_eq!(cli.unwrap().network, "archive");
+}
+
+#[test]
+fn parse_subnet_list_at_block() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "subnet", "list", "--at-block", "5000000"]);
+    assert!(cli.is_ok());
+}
+
+#[test]
+fn parse_subnet_show_at_block() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "subnet",
+        "show",
+        "--netuid",
+        "1",
+        "--at-block",
+        "5000000",
+    ]);
+    assert!(cli.is_ok());
+}
+
+#[test]
+fn parse_subnet_metagraph_at_block() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "subnet",
+        "metagraph",
+        "--netuid",
+        "1",
+        "--at-block",
+        "5000000",
+    ]);
+    assert!(cli.is_ok());
+}
+
+#[test]
+fn parse_view_portfolio_at_block() {
+    let cli =
+        agcli::cli::Cli::try_parse_from(["agcli", "view", "portfolio", "--at-block", "5000000"]);
+    assert!(cli.is_ok());
+}
+
+#[test]
+fn parse_view_dynamic_at_block() {
+    let cli =
+        agcli::cli::Cli::try_parse_from(["agcli", "view", "dynamic", "--at-block", "5000000"]);
+    assert!(cli.is_ok());
+}
+
+#[test]
+fn parse_view_neuron_at_block() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "view",
+        "neuron",
+        "--netuid",
+        "1",
+        "--uid",
+        "0",
+        "--at-block",
+        "5000000",
+    ]);
+    assert!(cli.is_ok());
+}
+
+#[test]
+fn parse_view_validators_at_block() {
+    let cli =
+        agcli::cli::Cli::try_parse_from(["agcli", "view", "validators", "--at-block", "5000000"]);
+    assert!(cli.is_ok());
+}
+
+#[test]
+fn parse_block_latest() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "block", "latest"]);
+    assert!(cli.is_ok());
+}
+
+#[test]
+fn parse_block_info() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "block", "info", "--number", "5000000"]);
+    assert!(cli.is_ok());
+}
+
+#[test]
+fn parse_explain_archive() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "explain", "--topic", "archive"]);
+    assert!(cli.is_ok());
+}
+
+#[test]
+fn resolve_network_archive() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "--network", "archive", "balance"]);
+    assert!(cli.is_ok());
+    let cli = cli.unwrap();
+    let network = cli.resolve_network();
+    assert!(network.is_archive());
+    assert!(network.ws_url().starts_with("wss://"));
+}

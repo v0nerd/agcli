@@ -35,7 +35,7 @@ impl Client {
         let rpc_client = RpcClient::from_url(url)
             .await
             .with_context(|| format!(
-                "Failed to connect to subtensor node at '{}'. Check your network connection and endpoint.\n  Finney:  wss://entrypoint-finney.opentensor.ai:443\n  Test:    wss://test.finney.opentensor.ai:443\n  Local:   ws://127.0.0.1:9944\n  Set with: --network finney|test|local  or  --endpoint <url>",
+                "Failed to connect to subtensor node at '{}'. Check your network connection and endpoint.\n  Finney:  wss://entrypoint-finney.opentensor.ai:443\n  Test:    wss://test.finney.opentensor.ai:443\n  Archive: wss://bittensor-finney.api.onfinality.io/public-ws\n  Local:   ws://127.0.0.1:9944\n  Set with: --network finney|test|local|archive  or  --endpoint <url>",
                 url
             ))?;
         let rpc = LegacyRpcMethods::new(rpc_client.clone());
@@ -135,7 +135,7 @@ impl Client {
         if is_state_pruned {
             if let Some(bn) = block_number {
                 return anyhow::anyhow!(
-                    "{}\n\n  Hint: Block {} state may have been pruned from this node.\n  Use --endpoint with an archive node to query historical state.\n  Example: agcli balance --at-block {} --endpoint wss://archive-node-url:443",
+                    "{}\n\n  Hint: Block {} state may have been pruned from this node.\n  Use --network archive (or --endpoint <archive-url>) to query historical state.\n  Example: agcli balance --at-block {} --network archive",
                     msg, bn, bn
                 );
             }
@@ -1387,6 +1387,166 @@ impl Client {
                     .join(", "),
             }
         }))
+    }
+
+    /// Get all subnets at a specific block hash (via runtime API at block).
+    pub async fn get_all_subnets_at_block(
+        &self,
+        block_hash: subxt::utils::H256,
+    ) -> Result<Vec<SubnetInfo>> {
+        let payload = api::apis().subnet_info_runtime_api().get_subnets_info();
+        let result = self
+            .inner
+            .runtime_api()
+            .at(block_hash)
+            .call(payload)
+            .await
+            .map_err(|e| Self::annotate_at_block_error(e.into(), None))?;
+        Ok(result.into_iter().flatten().map(SubnetInfo::from).collect())
+    }
+
+    /// Get all dynamic info at a specific block hash.
+    pub async fn get_all_dynamic_info_at_block(
+        &self,
+        block_hash: subxt::utils::H256,
+    ) -> Result<Vec<DynamicInfo>> {
+        let payload = api::apis().subnet_info_runtime_api().get_all_dynamic_info();
+        let result = self
+            .inner
+            .runtime_api()
+            .at(block_hash)
+            .call(payload)
+            .await
+            .map_err(|e| Self::annotate_at_block_error(e.into(), None))?;
+        Ok(result
+            .into_iter()
+            .flatten()
+            .map(DynamicInfo::from)
+            .collect())
+    }
+
+    /// Get dynamic info for a specific subnet at a block hash.
+    pub async fn get_dynamic_info_at_block(
+        &self,
+        netuid: NetUid,
+        block_hash: subxt::utils::H256,
+    ) -> Result<Option<DynamicInfo>> {
+        let payload = api::apis()
+            .subnet_info_runtime_api()
+            .get_dynamic_info(netuid.0);
+        let result = self
+            .inner
+            .runtime_api()
+            .at(block_hash)
+            .call(payload)
+            .await
+            .map_err(|e| Self::annotate_at_block_error(e.into(), None))?;
+        Ok(result.map(DynamicInfo::from))
+    }
+
+    /// Get lightweight neuron info for a subnet at a specific block hash.
+    pub async fn get_neurons_lite_at_block(
+        &self,
+        netuid: NetUid,
+        block_hash: subxt::utils::H256,
+    ) -> Result<Vec<NeuronInfoLite>> {
+        let payload = api::apis()
+            .neuron_info_runtime_api()
+            .get_neurons_lite(netuid.0);
+        let result = self
+            .inner
+            .runtime_api()
+            .at(block_hash)
+            .call(payload)
+            .await
+            .map_err(|e| Self::annotate_at_block_error(e.into(), None))?;
+        Ok(result.into_iter().map(NeuronInfoLite::from).collect())
+    }
+
+    /// Get full neuron info for a specific UID at a block hash.
+    pub async fn get_neuron_at_block(
+        &self,
+        netuid: NetUid,
+        uid: u16,
+        block_hash: subxt::utils::H256,
+    ) -> Result<Option<NeuronInfo>> {
+        let payload = api::apis()
+            .neuron_info_runtime_api()
+            .get_neuron(netuid.0, uid);
+        let result = self
+            .inner
+            .runtime_api()
+            .at(block_hash)
+            .call(payload)
+            .await
+            .map_err(|e| Self::annotate_at_block_error(e.into(), None))?;
+        Ok(result.map(NeuronInfo::from))
+    }
+
+    /// Get all delegates at a specific block hash.
+    pub async fn get_delegates_at_block(
+        &self,
+        block_hash: subxt::utils::H256,
+    ) -> Result<Vec<DelegateInfo>> {
+        let payload = api::apis().delegate_info_runtime_api().get_delegates();
+        let result = self
+            .inner
+            .runtime_api()
+            .at(block_hash)
+            .call(payload)
+            .await
+            .map_err(|e| Self::annotate_at_block_error(e.into(), None))?;
+        Ok(result.into_iter().map(DelegateInfo::from).collect())
+    }
+
+    /// Get total issuance at a specific block hash.
+    pub async fn get_total_issuance_at_block(
+        &self,
+        block_hash: subxt::utils::H256,
+    ) -> Result<Balance> {
+        let addr = api::storage().balances().total_issuance();
+        let val = self
+            .inner
+            .storage()
+            .at(block_hash)
+            .fetch(&addr)
+            .await
+            .map_err(|e| Self::annotate_at_block_error(e.into(), None))?;
+        Ok(Balance::from_rao(val.unwrap_or(0) as u64))
+    }
+
+    /// Get block header (number, hash, parent_hash, extrinsics_root, state_root).
+    pub async fn get_block_header(
+        &self,
+        block_hash: subxt::utils::H256,
+    ) -> Result<(
+        u32,
+        subxt::utils::H256,
+        subxt::utils::H256,
+        subxt::utils::H256,
+    )> {
+        let block = self.inner.blocks().at(block_hash).await?;
+        let header = block.header();
+        Ok((
+            header.number,
+            block_hash,
+            header.parent_hash,
+            header.state_root,
+        ))
+    }
+
+    /// Get extrinsic count in a block.
+    pub async fn get_block_extrinsic_count(&self, block_hash: subxt::utils::H256) -> Result<usize> {
+        let block = self.inner.blocks().at(block_hash).await?;
+        let extrinsics = block.extrinsics().await?;
+        Ok(extrinsics.len())
+    }
+
+    /// Get the timestamp for a block by reading the Timestamp.set() inherent.
+    pub async fn get_block_timestamp(&self, block_hash: subxt::utils::H256) -> Result<Option<u64>> {
+        let addr = api::storage().timestamp().now();
+        let val = self.inner.storage().at(block_hash).fetch(&addr).await?;
+        Ok(val)
     }
 
     // ──────── Crowdloan ────────

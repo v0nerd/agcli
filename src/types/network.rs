@@ -35,6 +35,7 @@ pub enum Network {
     Finney,
     Test,
     Local,
+    Archive,
     Custom(String),
 }
 
@@ -45,8 +46,14 @@ impl Network {
             Network::Finney => "wss://entrypoint-finney.opentensor.ai:443",
             Network::Test => "wss://test.finney.opentensor.ai:443",
             Network::Local => "ws://127.0.0.1:9944",
+            Network::Archive => "wss://bittensor-finney.api.onfinality.io/public-ws",
             Network::Custom(url) => url,
         }
+    }
+
+    /// Whether this network points to an archive node.
+    pub fn is_archive(&self) -> bool {
+        matches!(self, Network::Archive)
     }
 
     /// SS58 address prefix for this network.
@@ -61,6 +68,7 @@ impl fmt::Display for Network {
             Network::Finney => write!(f, "finney"),
             Network::Test => write!(f, "test"),
             Network::Local => write!(f, "local"),
+            Network::Archive => write!(f, "archive"),
             Network::Custom(url) => write!(f, "custom({})", url),
         }
     }

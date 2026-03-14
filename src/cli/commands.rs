@@ -312,6 +312,10 @@ pub async fn execute(cli: Cli) -> Result<()> {
             let addr = resolve_coldkey_address(address, &cli.wallet_dir, &cli.wallet);
             view_cmds::handle_audit(&client, &addr, output).await
         }
+        Commands::Block(cmd) => {
+            let client = Client::connect(network.ws_url()).await?;
+            handle_block(cmd, &client, output).await
+        }
         Commands::Batch { file, no_atomic } => {
             let client = Client::connect(network.ws_url()).await?;
             let mut wallet = open_wallet(&cli.wallet_dir, &cli.wallet)?;
@@ -335,7 +339,64 @@ async fn handle_subnet(
     password: Option<&str>,
 ) -> Result<()> {
     match cmd {
-        SubnetCommands::List => {
+        SubnetCommands::List { at_block } => {
+            let title: Option<String> = if let Some(bn) = at_block {
+                let block_hash = client.get_block_hash(bn).await?;
+                let mut subnets = client.get_all_subnets_at_block(block_hash).await?;
+                // Try to enrich names from dynamic info at the same block
+                if let Ok(dynamic) = client.get_all_dynamic_info_at_block(block_hash).await {
+                    let name_map: std::collections::HashMap<u16, (String, u64)> = dynamic
+                        .iter()
+                        .filter(|d| !d.name.is_empty())
+                        .map(|d| (d.netuid.0, (d.name.clone(), d.total_emission())))
+                        .collect();
+                    for s in &mut subnets {
+                        if let Some((name, emission)) = name_map.get(&s.netuid.0) {
+                            s.name = name.clone();
+                            if s.emission_value == 0 {
+                                s.emission_value = *emission;
+                            }
+                        }
+                    }
+                }
+                render_rows(
+                    output,
+                    &subnets,
+                    "netuid,name,n,max_n,tempo,emission,burn_rao,owner",
+                    |s| {
+                        format!(
+                            "{},{},{},{},{},{},{},{}",
+                            s.netuid,
+                            s.name,
+                            s.n,
+                            s.max_n,
+                            s.tempo,
+                            s.emission_value,
+                            s.burn.rao(),
+                            s.owner
+                        )
+                    },
+                    &[
+                        "NetUID", "Name", "N", "Max", "Tempo", "Emission", "Burn", "Owner",
+                    ],
+                    |s| {
+                        vec![
+                            format!("{}", s.netuid),
+                            s.name.clone(),
+                            format!("{}", s.n),
+                            format!("{}", s.max_n),
+                            format!("{}", s.tempo),
+                            format!("{:.4} τ", s.emission_value as f64 / 1e9),
+                            s.burn.display_tao(),
+                            crate::utils::short_ss58(&s.owner),
+                        ]
+                    },
+                    Some(&format!("Subnets at block {}", bn)),
+                );
+                return Ok(());
+            } else {
+                None
+            };
             let subnets = crate::queries::subnet::list_subnets(client).await?;
             render_rows(
                 output,
@@ -369,15 +430,27 @@ async fn handle_subnet(
                         crate::utils::short_ss58(&s.owner),
                     ]
                 },
-                None,
+                title.as_deref(),
             );
             Ok(())
         }
-        SubnetCommands::Show { netuid } => {
+        SubnetCommands::Show { netuid, at_block } => {
             let nuid = NetUid(netuid);
-            let (info, dynamic) = tokio::try_join!(client.get_subnet_info(nuid), async {
-                Ok::<_, anyhow::Error>(client.get_dynamic_info(nuid).await.ok().flatten())
-            },)?;
+            let (info, dynamic) = if let Some(bn) = at_block {
+                let bh = client.get_block_hash(bn).await?;
+                let subnets = client.get_all_subnets_at_block(bh).await?;
+                let si = subnets.into_iter().find(|s| s.netuid == nuid);
+                let di = client
+                    .get_dynamic_info_at_block(nuid, bh)
+                    .await
+                    .ok()
+                    .flatten();
+                (si, di)
+            } else {
+                tokio::try_join!(client.get_subnet_info(nuid), async {
+                    Ok::<_, anyhow::Error>(client.get_dynamic_info(nuid).await.ok().flatten())
+                })?
+            };
             match info {
                 Some(mut s) => {
                     if let Some(ref di) = dynamic {
@@ -505,10 +578,21 @@ async fn handle_subnet(
             }
             Ok(())
         }
-        SubnetCommands::Metagraph { netuid, uid } => {
+        SubnetCommands::Metagraph {
+            netuid,
+            uid,
+            at_block,
+        } => {
             // Single-UID lookup
             if let Some(target_uid) = uid {
-                let neuron = client.get_neuron(NetUid(netuid), target_uid).await?;
+                let neuron = if let Some(bn) = at_block {
+                    let bh = client.get_block_hash(bn).await?;
+                    client
+                        .get_neuron_at_block(NetUid(netuid), target_uid, bh)
+                        .await?
+                } else {
+                    client.get_neuron(NetUid(netuid), target_uid).await?
+                };
                 match neuron {
                     Some(n) => {
                         if output == "json" {
@@ -549,13 +633,24 @@ async fn handle_subnet(
                 return Ok(());
             }
             // Full metagraph
-            if let Some(interval) = live_interval {
-                return crate::live::live_metagraph(client, netuid.into(), interval).await;
+            if at_block.is_none() {
+                if let Some(interval) = live_interval {
+                    return crate::live::live_metagraph(client, netuid.into(), interval).await;
+                }
             }
-            let mg = crate::queries::fetch_metagraph(client, netuid.into()).await?;
+            let (neurons, block) = if let Some(bn) = at_block {
+                let bh = client.get_block_hash(bn).await?;
+                let neurons = client.get_neurons_lite_at_block(NetUid(netuid), bh).await?;
+                (neurons, bn as u64)
+            } else {
+                let neurons = client.get_neurons_lite(NetUid(netuid)).await?;
+                let block = client.get_block_number().await?;
+                (neurons, block)
+            };
+            let n_count = neurons.len() as u16;
             render_rows(
                 output,
-                &mg.neurons,
+                &neurons,
                 "uid,hotkey,coldkey,stake_rao,rank,trust,consensus,incentive,dividends,emission,validator_permit,last_update",
                 |n| {
                     format!(
@@ -579,7 +674,7 @@ async fn handle_subnet(
                         if n.validator_permit { "Y" } else { "" }.to_string(),
                     ]
                 },
-                Some(&format!("Metagraph SN{} — {} neurons, block {}", netuid, mg.n, mg.block)),
+                Some(&format!("Metagraph SN{} — {} neurons, block {}", netuid, n_count, block)),
             );
             Ok(())
         }
@@ -895,6 +990,84 @@ fn format_slippage(pct: f64) -> String {
         format!("{:.2}%!", pct)
     } else {
         format!("{:.2}%", pct)
+    }
+}
+
+// ──────── Block Explorer ────────
+
+async fn handle_block(cmd: BlockCommands, client: &Client, output: &str) -> Result<()> {
+    match cmd {
+        BlockCommands::Info { number } => {
+            let block_hash = client.get_block_hash(number).await?;
+            let (block_num, hash, parent_hash, state_root) =
+                client.get_block_header(block_hash).await?;
+            let ext_count = client.get_block_extrinsic_count(block_hash).await?;
+            let timestamp = client.get_block_timestamp(block_hash).await?;
+
+            if output == "json" {
+                let mut obj = serde_json::json!({
+                    "block_number": block_num,
+                    "block_hash": format!("{:?}", hash),
+                    "parent_hash": format!("{:?}", parent_hash),
+                    "state_root": format!("{:?}", state_root),
+                    "extrinsic_count": ext_count,
+                });
+                if let Some(ts) = timestamp {
+                    obj["timestamp_ms"] = serde_json::json!(ts);
+                    if let Some(dt) = chrono::DateTime::from_timestamp_millis(ts as i64) {
+                        obj["timestamp"] = serde_json::json!(dt.to_rfc3339());
+                    }
+                }
+                print_json(&obj);
+            } else {
+                println!("Block #{}", block_num);
+                println!("  Hash:        {:?}", hash);
+                println!("  Parent:      {:?}", parent_hash);
+                println!("  State root:  {:?}", state_root);
+                println!("  Extrinsics:  {}", ext_count);
+                if let Some(ts) = timestamp {
+                    if let Some(dt) = chrono::DateTime::from_timestamp_millis(ts as i64) {
+                        println!("  Timestamp:   {}", dt.format("%Y-%m-%d %H:%M:%S UTC"));
+                    } else {
+                        println!("  Timestamp:   {} ms", ts);
+                    }
+                }
+            }
+            Ok(())
+        }
+        BlockCommands::Latest => {
+            let block_num = client.get_block_number().await?;
+            let block_hash = client.get_block_hash(block_num as u32).await?;
+            let ext_count = client.get_block_extrinsic_count(block_hash).await?;
+            let timestamp = client.get_block_timestamp(block_hash).await?;
+
+            if output == "json" {
+                let mut obj = serde_json::json!({
+                    "block_number": block_num,
+                    "block_hash": format!("{:?}", block_hash),
+                    "extrinsic_count": ext_count,
+                });
+                if let Some(ts) = timestamp {
+                    obj["timestamp_ms"] = serde_json::json!(ts);
+                    if let Some(dt) = chrono::DateTime::from_timestamp_millis(ts as i64) {
+                        obj["timestamp"] = serde_json::json!(dt.to_rfc3339());
+                    }
+                }
+                print_json(&obj);
+            } else {
+                println!("Latest Block: #{}", block_num);
+                println!("  Hash:        {:?}", block_hash);
+                println!("  Extrinsics:  {}", ext_count);
+                if let Some(ts) = timestamp {
+                    if let Some(dt) = chrono::DateTime::from_timestamp_millis(ts as i64) {
+                        println!("  Timestamp:   {}", dt.format("%Y-%m-%d %H:%M:%S UTC"));
+                    } else {
+                        println!("  Timestamp:   {} ms", ts);
+                    }
+                }
+            }
+            Ok(())
+        }
     }
 }
 

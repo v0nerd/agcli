@@ -28,6 +28,10 @@ pub fn explain(topic: &str) -> Option<&'static str> {
         "limits" | "networklimits" | "chainlimits" => Some(LIMITS),
         "hyperparams" | "hyperparameters" | "params" => Some(HYPERPARAMS),
         "axon" | "axoninfo" | "serving" => Some(AXON),
+        "take" | "delegatetake" | "validatortake" => Some(TAKE),
+        "recycle" | "recyclealpha" | "burn" | "burnalpha" => Some(RECYCLE),
+        "pow" | "powregistration" | "proofofwork" => Some(POW_REGISTRATION),
+        "archive" | "archivenode" | "historical" | "wayback" => Some(ARCHIVE),
         topics => {
             // Fuzzy: check if the topic is a substring of any key
             let all = list_topics();
@@ -69,6 +73,10 @@ pub fn list_topics() -> Vec<(&'static str, &'static str)> {
         ("limits", "Network and chain operational limits"),
         ("hyperparams", "Subnet hyperparameters reference"),
         ("axon", "Axon serving endpoint for miners/validators"),
+        ("take", "Validator/delegate take percentage"),
+        ("recycle", "Recycling and burning alpha tokens"),
+        ("pow", "Proof-of-work registration mechanics"),
+        ("archive", "Archive nodes and historical data queries"),
     ]
 }
 
@@ -726,3 +734,151 @@ For validators:
 - Neurons with stale or missing axon info may be inactive.
 - The `last_update` field in the metagraph shows when the neuron last interacted
   with the chain (not necessarily axon-specific).";
+
+const TAKE: &str = "\
+VALIDATOR / DELEGATE TAKE
+=========================
+Take is the percentage of emissions a validator keeps before distributing dividends
+to their delegators (nominators).
+
+How it works:
+- A validator earns dividends from Yuma consensus based on weight accuracy.
+- Before distributing to delegators, the validator takes a cut (the 'take').
+- Remaining dividends are split proportionally among delegators by stake.
+
+Take range:
+- Minimum: 0% (validator keeps nothing — all dividends go to delegators)
+- Maximum: 11.11% (18% of the u16 max, capped by chain logic)
+- Default: typically 11.11% for new validators
+
+Adjusting take:
+  agcli delegate decrease-take <pct>    # Lower your take (attracts more delegation)
+  agcli delegate increase-take <pct>    # Raise your take (takes effect after delay)
+
+Important: take increases are delayed by the TakeDecreaseDelay hyperparameter
+(typically ~7 days) to prevent bait-and-switch tactics. Take decreases
+are instant — lowering take to attract stake is immediate.
+
+Strategy:
+- Low take attracts more delegators → more total stake → more influence.
+- High take keeps more for yourself but discourages delegation.
+- Top validators often run 5-9% take as a competitive balance.
+
+Check take: `agcli delegate list` shows take % for all delegates.";
+
+const RECYCLE: &str = "\
+RECYCLE & BURN ALPHA
+====================
+Alpha tokens can be recycled (converted back to TAO) or burned (permanently
+destroyed). Both operations reduce the alpha supply on a subnet.
+
+RECYCLE ALPHA:
+- Converts your alpha tokens back to TAO through the AMM.
+- The alpha goes back into the pool, increasing alpha_in.
+- You receive TAO from the pool, decreasing tao_in.
+- Subject to AMM slippage on shallow pools.
+  agcli stake recycle-alpha <amount> --netuid <N>
+
+BURN ALPHA:
+- Permanently destroys alpha tokens, reducing total supply.
+- No TAO is returned — the tokens are gone forever.
+- Burning increases the value of remaining alpha (deflationary).
+- Used by subnet operators to manage token economics.
+  agcli stake burn-alpha <amount> --netuid <N>
+
+When to recycle vs burn:
+- Recycle: You want your TAO back. Acts like a normal unstake through the AMM.
+- Burn: You want to intentionally reduce supply to boost the subnet's alpha value.
+  This is a deliberate economic action, not a recovery mechanism.
+
+Slippage warning:
+- Both recycle and large unstakes go through the AMM.
+- Check the pool depth first: `agcli subnet show <netuid>` (look at tao_in).
+- Simulate before acting: `agcli view swap-sim --netuid <N> --alpha <amount>`";
+
+const POW_REGISTRATION: &str = "\
+PROOF-OF-WORK REGISTRATION
+===========================
+PoW registration lets you register a neuron (miner/validator) on a subnet by
+solving a computational puzzle instead of paying the burn fee.
+
+How it works:
+1. The chain publishes a target difficulty and a block hash as the 'input'.
+2. Your node iterates through nonces until it finds one that, when hashed with
+   the input, produces a hash below the target difficulty.
+3. Submit the solution on-chain: `agcli subnet pow <netuid> --threads 8`
+4. If valid and below difficulty, you get a UID on the subnet.
+
+Difficulty adjustment:
+- The chain adjusts difficulty based on the target_regs_per_interval parameter.
+- More PoW registrations → higher difficulty → harder puzzles.
+- Fewer registrations → lower difficulty → easier puzzles.
+- Check current difficulty: `agcli subnet hyperparams <netuid>` → difficulty
+
+Practical tips:
+- Use `--threads` to set the number of CPU threads for parallel searching.
+- PoW is competitive — someone else may solve it before you.
+- Solutions expire quickly — compute and submit within the same block window.
+- Some subnets have very high difficulty (hundreds of thousands), making PoW
+  impractical. Check difficulty before spending CPU time.
+- Energy cost: compare the electricity cost of PoW vs the burn registration fee.
+  Often burn is cheaper for established subnets.
+
+When to use PoW:
+- You have spare CPU/GPU capacity and want to avoid spending TAO.
+- The burn cost is high relative to your TAO holdings.
+- You're running a bootstrapping operation on a new (low-difficulty) subnet.
+
+Key hyperparams:
+- difficulty: current PoW target difficulty
+- min_difficulty / max_difficulty: difficulty bounds
+- adjustment_interval: blocks between difficulty adjustments
+- target_regs_per_interval: target registrations that drive adjustment";
+
+const ARCHIVE: &str = "\
+ARCHIVE NODES & HISTORICAL DATA
+================================
+Standard Bittensor nodes prune old block state to save disk space. Archive nodes
+retain the full state for every block, enabling historical queries.
+
+Why archive nodes matter:
+- Standard (pruned) nodes only keep recent state (~256 blocks).
+- Querying old blocks on a pruned node returns 'State already discarded' errors.
+- Archive nodes store every block's state, so you can query any historical block.
+
+Using archive nodes in agcli:
+  # Use the built-in archive network preset
+  agcli balance --at-block 3000000 --network archive
+
+  # Or specify a custom archive endpoint
+  agcli subnet metagraph --netuid 1 --at-block 3000000 --endpoint wss://your-archive:443
+
+  # Set as default in config
+  agcli config set --key network --value archive
+
+Commands that support --at-block (historical wayback):
+  agcli balance --at-block N
+  agcli stake list --at-block N
+  agcli subnet list --at-block N
+  agcli subnet show --netuid X --at-block N
+  agcli subnet metagraph --netuid X --at-block N
+  agcli view network --at-block N
+  agcli view portfolio --at-block N
+  agcli view dynamic --at-block N
+  agcli view neuron --netuid X --uid Y --at-block N
+  agcli view validators --at-block N
+  agcli view account --at-block N
+
+Block explorer:
+  agcli block latest        # Current block info
+  agcli block info --number N   # Details for a specific block
+
+Known archive providers:
+- OnFinality:  wss://bittensor-finney.api.onfinality.io/public-ws (built-in)
+- Self-hosted: Run a subtensor node with --pruning=archive
+
+Tips:
+- Archive queries are slower than standard queries due to state retrieval.
+- The --network archive flag automatically uses a public archive endpoint.
+- For heavy historical analysis, consider running your own archive node.
+- Auto-detection: if --at-block hits pruned state, agcli suggests using --network archive.";

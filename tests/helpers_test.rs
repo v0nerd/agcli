@@ -586,11 +586,105 @@ fn explain_axon_aliases() {
 }
 
 #[test]
-fn explain_topic_count_25() {
+fn explain_topic_count_28() {
     let topics = explain::list_topics();
     assert!(
-        topics.len() >= 25,
-        "Expected at least 25 topics, got {}",
+        topics.len() >= 28,
+        "Expected at least 28 topics, got {}",
         topics.len()
     );
+}
+
+#[test]
+fn explain_take_topic() {
+    let content = explain::explain("take");
+    assert!(content.is_some(), "take topic should exist");
+    let text = content.unwrap();
+    assert!(text.contains("percentage") || text.contains("dividends"));
+    assert!(text.contains("delegate") || text.contains("Delegate"));
+}
+
+#[test]
+fn explain_take_aliases() {
+    assert!(explain::explain("delegate-take").is_some());
+    assert!(explain::explain("validator_take").is_some());
+}
+
+#[test]
+fn explain_recycle_topic() {
+    let content = explain::explain("recycle");
+    assert!(content.is_some(), "recycle topic should exist");
+    let text = content.unwrap();
+    assert!(text.contains("alpha") || text.contains("Alpha"));
+    assert!(text.contains("burn") || text.contains("Burn"));
+}
+
+#[test]
+fn explain_recycle_aliases() {
+    assert!(explain::explain("burn-alpha").is_some());
+    assert!(explain::explain("recyclealpha").is_some());
+}
+
+#[test]
+fn explain_pow_topic() {
+    let content = explain::explain("pow");
+    assert!(content.is_some(), "pow topic should exist");
+    let text = content.unwrap();
+    assert!(text.contains("difficulty") || text.contains("nonce"));
+    assert!(text.contains("registration") || text.contains("Registration"));
+}
+
+#[test]
+fn explain_pow_aliases() {
+    assert!(explain::explain("pow-registration").is_some());
+    assert!(explain::explain("proof-of-work").is_some());
+}
+
+// ──── Step 34 — archive explain topic ────
+
+#[test]
+fn explain_archive_topic() {
+    let content = explain::explain("archive");
+    assert!(content.is_some(), "archive topic should exist");
+    let text = content.unwrap();
+    assert!(text.contains("historical") || text.contains("Historical"));
+    assert!(text.contains("--at-block") || text.contains("at_block"));
+    assert!(text.contains("--network archive"));
+}
+
+#[test]
+fn explain_archive_aliases() {
+    assert!(explain::explain("archive-node").is_some());
+    assert!(explain::explain("historical").is_some());
+    assert!(explain::explain("wayback").is_some());
+    assert!(explain::explain("ARCHIVE").is_some());
+}
+
+#[test]
+fn explain_topic_count_29() {
+    let topics = explain::list_topics();
+    assert!(
+        topics.len() >= 29,
+        "Expected at least 29 topics, got {}",
+        topics.len()
+    );
+}
+
+// ──── Step 34 — Network::Archive ────
+
+#[test]
+fn network_archive_url() {
+    use agcli::types::network::Network;
+    let net = Network::Archive;
+    assert!(net.ws_url().starts_with("wss://"));
+    assert!(net.is_archive());
+    assert_eq!(format!("{}", net), "archive");
+}
+
+#[test]
+fn network_finney_not_archive() {
+    use agcli::types::network::Network;
+    assert!(!Network::Finney.is_archive());
+    assert!(!Network::Test.is_archive());
+    assert!(!Network::Local.is_archive());
 }

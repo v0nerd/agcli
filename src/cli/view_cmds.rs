@@ -15,24 +15,36 @@ pub async fn handle_view(
     live_interval: Option<u64>,
 ) -> Result<()> {
     match cmd {
-        ViewCommands::Portfolio { address } => {
+        ViewCommands::Portfolio { address, at_block } => {
             let addr = resolve_coldkey_address(address, wallet_dir, wallet_name);
+            if let Some(bn) = at_block {
+                return handle_portfolio_at_block(client, &addr, output, bn).await;
+            }
             if let Some(interval) = live_interval {
                 return crate::live::live_portfolio(client, &addr, interval).await;
             }
             handle_portfolio(client, &addr, output).await
         }
         ViewCommands::Network { at_block } => handle_network(client, output, at_block).await,
-        ViewCommands::Dynamic => {
+        ViewCommands::Dynamic { at_block } => {
+            if let Some(bn) = at_block {
+                return handle_dynamic_at_block(client, output, bn).await;
+            }
             if let Some(interval) = live_interval {
                 return crate::live::live_dynamic(client, interval).await;
             }
             handle_dynamic(client, output).await
         }
-        ViewCommands::Neuron { netuid, uid } => handle_neuron(client, netuid, uid).await,
-        ViewCommands::Validators { netuid, limit } => {
-            handle_validators(client, output, netuid, limit).await
-        }
+        ViewCommands::Neuron {
+            netuid,
+            uid,
+            at_block,
+        } => handle_neuron(client, netuid, uid, at_block).await,
+        ViewCommands::Validators {
+            netuid,
+            limit,
+            at_block,
+        } => handle_validators(client, output, netuid, limit, at_block).await,
         ViewCommands::History { address, limit } => {
             let addr = resolve_coldkey_address(address, wallet_dir, wallet_name);
             handle_history(&addr, output, limit).await
@@ -224,8 +236,136 @@ async fn handle_dynamic(client: &Client, output: &str) -> Result<()> {
     Ok(())
 }
 
-async fn handle_neuron(client: &Client, netuid: u16, uid: u16) -> Result<()> {
-    let neuron = client.get_neuron(NetUid(netuid), uid).await?;
+async fn handle_portfolio_at_block(
+    client: &Client,
+    addr: &str,
+    output: &str,
+    block_num: u32,
+) -> Result<()> {
+    let block_hash = client.get_block_hash(block_num).await?;
+    let (balance, stakes) = tokio::try_join!(
+        client.get_balance_at_block(addr, block_hash),
+        client.get_stake_for_coldkey_at_block(addr, block_hash),
+    )?;
+    let total_staked: u64 = stakes.iter().map(|s| s.stake.rao()).sum();
+    if output == "json" {
+        print_json(&serde_json::json!({
+            "address": addr,
+            "block": block_num,
+            "free_balance_rao": balance.rao(),
+            "free_balance_tao": balance.tao(),
+            "total_staked_rao": total_staked,
+            "total_staked_tao": total_staked as f64 / 1e9,
+            "stakes": stakes.iter().map(|s| serde_json::json!({
+                "hotkey": s.hotkey,
+                "netuid": s.netuid.0,
+                "stake_rao": s.stake.rao(),
+                "stake_tao": s.stake.tao(),
+            })).collect::<Vec<_>>(),
+        }));
+    } else {
+        println!(
+            "Portfolio for {} (block {})",
+            crate::utils::short_ss58(addr),
+            block_num
+        );
+        println!("  Free:   {}", balance.display_tao());
+        println!(
+            "  Staked: {}",
+            Balance::from_rao(total_staked).display_tao()
+        );
+        println!(
+            "  Total:  {}",
+            (balance + Balance::from_rao(total_staked)).display_tao()
+        );
+        if !stakes.is_empty() {
+            render_rows(
+                output,
+                &stakes,
+                "netuid,hotkey,stake_rao",
+                |s| format!("{},{},{}", s.netuid, s.hotkey, s.stake.rao()),
+                &["NetUID", "Hotkey", "Stake"],
+                |s| {
+                    vec![
+                        format!("{}", s.netuid),
+                        crate::utils::short_ss58(&s.hotkey),
+                        s.stake.display_tao(),
+                    ]
+                },
+                None,
+            );
+        }
+    }
+    Ok(())
+}
+
+async fn handle_dynamic_at_block(client: &Client, output: &str, block_num: u32) -> Result<()> {
+    let block_hash = client.get_block_hash(block_num).await?;
+    let dynamic = client.get_all_dynamic_info_at_block(block_hash).await?;
+    render_rows(
+        output,
+        &dynamic,
+        "netuid,name,symbol,tempo,price,tao_in_rao,alpha_in,alpha_out,emission,volume",
+        |d| {
+            format!(
+                "{},{},{},{},{:.6},{},{},{},{},{}",
+                d.netuid,
+                d.name,
+                d.symbol,
+                d.tempo,
+                d.price,
+                d.tao_in.rao(),
+                d.alpha_in.raw(),
+                d.alpha_out.raw(),
+                d.total_emission(),
+                d.subnet_volume
+            )
+        },
+        &[
+            "NetUID",
+            "Name",
+            "Symbol",
+            "Price (τ/α)",
+            "TAO In",
+            "Alpha In",
+            "Alpha Out",
+            "Emission",
+            "Tempo",
+        ],
+        |d| {
+            vec![
+                format!("{}", d.netuid),
+                d.name.clone(),
+                d.symbol.clone(),
+                format!("{:.6}", d.price),
+                d.tao_in.display_tao(),
+                format!("{}", d.alpha_in),
+                format!("{}", d.alpha_out),
+                format!("{:.4} τ", d.total_emission() as f64 / 1e9),
+                format!("{}", d.tempo),
+            ]
+        },
+        Some(&format!(
+            "Dynamic TAO at block {} — {} subnets",
+            block_num,
+            dynamic.len()
+        )),
+    );
+    Ok(())
+}
+
+async fn handle_neuron(
+    client: &Client,
+    netuid: u16,
+    uid: u16,
+    at_block: Option<u32>,
+) -> Result<()> {
+    let neuron = if let Some(bn) = at_block {
+        let bh = client.get_block_hash(bn).await?;
+        client.get_neuron_at_block(NetUid(netuid), uid, bh).await?
+    } else {
+        client.get_neuron(NetUid(netuid), uid).await?
+    };
     match neuron {
         Some(n) => {
             println!("Neuron UID {} on SN{}", uid, netuid);
@@ -266,9 +406,15 @@ async fn handle_validators(
     output: &str,
     netuid: Option<u16>,
     limit: usize,
+    at_block: Option<u32>,
 ) -> Result<()> {
     if let Some(nuid) = netuid {
-        let neurons = client.get_neurons_lite(NetUid(nuid)).await?;
+        let neurons = if let Some(bn) = at_block {
+            let bh = client.get_block_hash(bn).await?;
+            client.get_neurons_lite_at_block(NetUid(nuid), bh).await?
+        } else {
+            client.get_neurons_lite(NetUid(nuid)).await?
+        };
         let mut validators: Vec<_> = neurons.into_iter().filter(|n| n.validator_permit).collect();
         validators.sort_by(|a, b| b.stake.rao().cmp(&a.stake.rao()));
         validators.truncate(limit);
@@ -308,13 +454,27 @@ async fn handle_validators(
             )),
         );
     } else {
-        let delegates = client.get_delegates().await?;
+        let delegates = if let Some(bn) = at_block {
+            let bh = client.get_block_hash(bn).await?;
+            client.get_delegates_at_block(bh).await?
+        } else {
+            client.get_delegates().await?
+        };
         let mut sorted = delegates;
         sorted.sort_by(|a, b| b.total_stake.rao().cmp(&a.total_stake.rao()));
         sorted.truncate(limit);
 
         // Add rank index for table display
         let ranked: Vec<(usize, _)> = sorted.into_iter().enumerate().collect();
+        let title = if let Some(bn) = at_block {
+            format!(
+                "Top {} validators by total stake (block {})",
+                ranked.len(),
+                bn
+            )
+        } else {
+            format!("Top {} validators by total stake", ranked.len())
+        };
         render_rows(
             output,
             &ranked,
@@ -350,7 +510,7 @@ async fn handle_validators(
                     format!("{}", d.registrations.len()),
                 ]
             },
-            Some(&format!("Top {} validators by total stake", ranked.len())),
+            Some(&title),
         );
     }
     Ok(())

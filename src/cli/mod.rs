@@ -209,6 +209,11 @@ pub enum Commands {
         address: Option<String>,
     },
 
+    // ──── Block ────
+    /// Block explorer (info, latest)
+    #[command(subcommand)]
+    Block(BlockCommands),
+
     // ──── Batch ────
     /// Submit multiple extrinsics from a JSON file via Utility.batch_all
     Batch {
@@ -532,12 +537,19 @@ pub enum StakeCommands {
 #[derive(Subcommand, Debug)]
 pub enum SubnetCommands {
     /// List all subnets
-    List,
+    List {
+        /// Query at a specific block number (historical wayback)
+        #[arg(long)]
+        at_block: Option<u32>,
+    },
     /// Show detailed info for a subnet
     Show {
         /// Subnet UID
         #[arg(long)]
         netuid: u16,
+        /// Query at a specific block number (historical wayback)
+        #[arg(long)]
+        at_block: Option<u32>,
     },
     /// Show subnet hyperparameters
     Hyperparams {
@@ -553,6 +565,9 @@ pub enum SubnetCommands {
         /// Show only a specific neuron UID
         #[arg(long)]
         uid: Option<u16>,
+        /// Query at a specific block number (historical wayback)
+        #[arg(long)]
+        at_block: Option<u32>,
     },
     /// Register a new subnet
     Register,
@@ -734,6 +749,9 @@ pub enum ViewCommands {
         /// Coldkey SS58
         #[arg(long)]
         address: Option<String>,
+        /// Query at a specific block number (historical wayback)
+        #[arg(long)]
+        at_block: Option<u32>,
     },
     /// Show neuron details
     Neuron {
@@ -743,6 +761,9 @@ pub enum ViewCommands {
         /// Neuron UID
         #[arg(long)]
         uid: u16,
+        /// Query at a specific block number (historical wayback)
+        #[arg(long)]
+        at_block: Option<u32>,
     },
     /// Show network overview
     Network {
@@ -751,7 +772,11 @@ pub enum ViewCommands {
         at_block: Option<u32>,
     },
     /// Show Dynamic TAO info for all subnets (prices, pools, volumes)
-    Dynamic,
+    Dynamic {
+        /// Query at a specific block number (historical wayback)
+        #[arg(long)]
+        at_block: Option<u32>,
+    },
     /// Show top validators by stake across subnets
     Validators {
         /// Subnet UID (omit for all subnets)
@@ -760,6 +785,9 @@ pub enum ViewCommands {
         /// Max number of validators to show
         #[arg(long, default_value = "50")]
         limit: usize,
+        /// Query at a specific block number (historical wayback)
+        #[arg(long)]
+        at_block: Option<u32>,
     },
     /// Show recent extrinsics for an account (via Subscan)
     History {
@@ -992,6 +1020,18 @@ pub enum CrowdloanCommands {
 }
 
 #[derive(Subcommand, Debug)]
+pub enum BlockCommands {
+    /// Show info for a specific block number
+    Info {
+        /// Block number
+        #[arg(long)]
+        number: u32,
+    },
+    /// Show the latest finalized block
+    Latest,
+}
+
+#[derive(Subcommand, Debug)]
 pub enum ConfigCommands {
     /// Show current configuration
     Show,
@@ -1070,6 +1110,7 @@ impl Cli {
                 "finney" | "main" => Network::Finney,
                 "test" | "testnet" => Network::Test,
                 "local" | "localhost" => Network::Local,
+                "archive" => Network::Archive,
                 other => Network::Custom(other.to_string()),
             }
         }
