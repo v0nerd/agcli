@@ -75,3 +75,6 @@ strip = true
 default = ["cli"]
 cli = []
 sdk-only = []
+
+[dev-dependencies]
+tempfile = "3.27.0"

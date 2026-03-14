@@ -58,7 +58,7 @@ mod tests {
     fn generate_and_roundtrip() {
         let (pair, mnemonic) = generate_mnemonic_keypair().unwrap();
         let pair2 = pair_from_mnemonic(&mnemonic).unwrap();
-        assert_eq!(pair.public(), pair2.public);
+        assert_eq!(pair.public(), pair2.public());
     }
 
     #[test]
