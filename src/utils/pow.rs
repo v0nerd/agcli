@@ -13,12 +13,21 @@ pub fn solve_pow(
     difficulty: u64,
     max_attempts: u64,
 ) -> Option<(u64, [u8; 32])> {
+    solve_pow_range(block_hash, hotkey_bytes, difficulty, 0, max_attempts)
+}
+
+/// Solve POW in a specific nonce range (for multi-threaded solving).
+pub fn solve_pow_range(
+    block_hash: &[u8; 32],
+    hotkey_bytes: &[u8; 32],
+    difficulty: u64,
+    start_nonce: u64,
+    count: u64,
+) -> Option<(u64, [u8; 32])> {
     let target = u64::MAX / difficulty;
 
-    for nonce in 0..max_attempts {
+    for nonce in start_nonce..start_nonce.saturating_add(count) {
         let hash = compute_pow_hash(block_hash, hotkey_bytes, nonce);
-
-        // Check first 8 bytes as u64 against target
         let score = u64::from_le_bytes(hash[..8].try_into().unwrap());
         if score <= target {
             return Some((nonce, hash));

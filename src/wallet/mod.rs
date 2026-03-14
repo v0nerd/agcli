@@ -46,7 +46,7 @@ impl Wallet {
     /// Open an existing wallet from disk.
     ///
     /// ```rust,no_run
-    /// let w = agcli::Wallet::open("~/.bittensor/wallets/default")?;
+    /// let w = agcli::Wallet::open("~/.bittensor/wallets/default").unwrap();
     /// ```
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
         let path = expand_tilde(path.as_ref());

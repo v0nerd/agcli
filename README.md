@@ -8,15 +8,16 @@ Covers everything: wallet management, staking, transfers, subnet operations, wei
 | Category | Capabilities |
 |---|---|
 | **Wallet** | Create, import (mnemonic/seed), encrypt/decrypt coldkeys, manage multiple hotkeys |
-| **Staking** | Add/remove stake, move between subnets, swap between hotkeys, limit orders, auto-stake, claim root dividends |
+| **Staking** | Add/remove stake, move between subnets, swap between hotkeys, limit orders, claim root dividends |
 | **Transfers** | Send TAO between accounts |
-| **Subnets** | List subnets, view metagraph, register neurons (burn/POW), create subnets, hyperparameters |
-| **Weights** | Set weights, commit-reveal (v2 and v3/TLE), batch operations |
+| **Subnets** | List subnets with real names, view metagraph, register neurons (burn/POW), create subnets, hyperparameters |
+| **Weights** | Set weights, commit-reveal with blake2 hashing, reveal operations |
 | **Delegates** | View delegates, manage take rates, childkey delegation |
-| **Identity** | Set/view on-chain identity for accounts and subnets |
-| **Queries** | Portfolio view, neuron info, dynamic pricing, subnet state, block info |
-| **Key Swaps** | Hotkey swap, coldkey swap (scheduled/announced), dispute |
-| **Root** | Root registration, root weights, root claims |
+| **Identity** | Query on-chain identity (Registry pallet), set/view subnet identity (SubnetIdentitiesV3) |
+| **Queries** | Portfolio view, neuron info, network overview, delegate info |
+| **Key Swaps** | Hotkey swap, coldkey swap (scheduled) |
+| **Root** | Root registration, root weights |
+| **Output** | Table (default), JSON (`--output json`), CSV support |
 
 ## Quick Start
 
@@ -32,14 +33,17 @@ cargo install --git https://github.com/unconst/agcli
 # Check balance
 agcli balance --address 5Gx...
 
+# Check balance as JSON
+agcli --output json balance --address 5Gx...
+
 # Create a wallet
 agcli wallet create --name my_wallet
 
-# List all subnets
+# List all subnets (with real names from SubnetIdentitiesV3)
 agcli subnet list
 
-# View metagraph
-agcli subnet metagraph 1
+# View metagraph as JSON
+agcli --output json subnet metagraph 1
 
 # Add stake
 agcli stake add 10.0 --netuid 1 --hotkey 5Hx...
@@ -50,8 +54,23 @@ agcli transfer 5Dest... 1.5
 # Set weights
 agcli weights set --netuid 1 "0:100,1:200,2:300"
 
+# Commit-reveal weights
+agcli weights commit --netuid 1 "0:100,1:200"
+
 # View portfolio
 agcli view portfolio
+
+# View network info as JSON
+agcli --output json view network
+
+# POW registration (multi-threaded)
+agcli subnet pow 1 --threads 8
+
+# Set subnet identity
+agcli identity set-subnet 1 --name "My Subnet" --github "user/repo"
+
+# Query on-chain identity
+agcli identity show 5GrwvaEF5zXb...
 ```
 
 ### SDK Usage (as library)
@@ -81,6 +100,20 @@ async fn main() -> anyhow::Result<()> {
     let block = client.get_block_number().await?;
     println!("Block: {}", block);
 
+    // List all subnets
+    let subnets = client.get_all_subnets().await?;
+    println!("Subnets: {}", subnets.len());
+
+    // Query subnet identity
+    let id = client.get_subnet_identity(1.into()).await?;
+    println!("SN1 name: {:?}", id.map(|i| i.subnet_name));
+
+    // Get stake info
+    let stakes = client.get_stake_for_coldkey("5Gx...").await?;
+    for s in &stakes {
+        println!("SN{}: {} staked", s.netuid, s.stake.display_tao());
+    }
+
     Ok(())
 }
 ```
@@ -90,44 +123,40 @@ async fn main() -> anyhow::Result<()> {
 ```
 agcli/
 ├── src/
-│   ├── lib.rs           # Library root, re-exports
+│   ├── lib.rs           # Library root, re-exports Client/Wallet/Balance
 │   ├── main.rs          # CLI entry point
-│   ├── chain/           # Substrate RPC client
-│   │   ├── connection.rs  # JSON-RPC transport
-│   │   ├── storage.rs     # Storage queries
-│   │   └── mod.rs         # High-level Client
+│   ├── chain/           # Substrate client (subxt-based)
+│   │   ├── mod.rs         # Client: 30+ queries + 20+ extrinsics
+│   │   ├── rpc_types.rs   # Type conversions from generated runtime types
+│   │   ├── connection.rs  # Legacy JSON-RPC transport
+│   │   └── storage.rs     # Raw storage queries
 │   ├── wallet/          # Wallet management
-│   │   ├── keypair.rs     # SR25519 key generation
-│   │   ├── keyfile.rs     # Encrypted file I/O
-│   │   └── mod.rs         # Wallet abstraction
-│   ├── types/           # Core data types
-│   │   ├── balance.rs     # TAO/Alpha balances
-│   │   ├── network.rs     # Network presets
-│   │   └── chain_data.rs  # Decoded chain structures
-│   ├── extrinsics/      # Transaction construction
-│   │   ├── staking.rs     # Stake operations
-│   │   ├── transfer.rs    # Transfers
-│   │   ├── registration.rs # Registration
-│   │   ├── weights.rs     # Weight setting
-│   │   ├── subnet.rs      # Subnet management
-│   │   ├── identity.rs    # Identity
-│   │   └── swap.rs        # Key swaps
+│   │   ├── keypair.rs     # SR25519 key generation, SS58 encoding
+│   │   ├── keyfile.rs     # AES-256-GCM encrypted coldkey files
+│   │   └── mod.rs         # Wallet abstraction (open/create/unlock)
+│   ├── types/           # Core data types (Serialize/Deserialize)
+│   │   ├── balance.rs     # TAO/Alpha balances with arithmetic
+│   │   ├── network.rs     # Network presets (finney/test/local)
+│   │   └── chain_data.rs  # NeuronInfo, SubnetInfo, StakeInfo, etc.
+│   ├── extrinsics/      # Extrinsic reference docs
+│   │   └── weights.rs     # Weight commit hash computation
 │   ├── queries/         # Composed query helpers
-│   │   ├── portfolio.rs   # Full portfolio view
+│   │   ├── portfolio.rs   # Full portfolio aggregation
 │   │   ├── metagraph.rs   # Metagraph fetch
 │   │   └── subnet.rs      # Subnet queries
 │   ├── utils/           # Shared utilities
-│   │   ├── format.rs      # Display formatting
-│   │   └── pow.rs         # POW solver
+│   │   ├── format.rs      # SS58 truncation, weight conversion
+│   │   └── pow.rs         # POW solver (multi-threaded)
 │   └── cli/             # CLI definitions
-│       ├── mod.rs         # Clap definitions
-│       └── commands.rs    # Command handlers
+│       ├── mod.rs         # Clap parser: 10 command groups, 40+ subcommands
+│       └── commands.rs    # Command handlers with JSON output support
 ├── docs/
 │   ├── llm.txt          # Agent-friendly docs
 │   └── tutorials/
 │       ├── getting-started.md
 │       ├── staking-guide.md
 │       └── subnet-builder.md
+├── build.rs             # Fetches chain metadata for subxt codegen
 ├── Cargo.toml
 └── README.md
 ```
@@ -136,24 +165,35 @@ agcli/
 
 - **TAO**: Native token. 1 TAO = 1,000,000,000 RAO.
 - **Subnets**: Independent networks (netuid 0-N) each running their own incentive mechanism.
-- **Coldkey**: Offline signing key for high-value ops (staking, transfers). Encrypted on disk.
+- **Coldkey**: Offline signing key for high-value ops (staking, transfers). Encrypted on disk with AES-256-GCM + Argon2id.
 - **Hotkey**: Online key for automated ops (weights, serving). Stored plaintext.
 - **Neurons**: Registered entities on a subnet (miners and validators).
 - **Weights**: Validators set weights to score miners, determining emission distribution.
 - **Dynamic TAO**: Each subnet has its own alpha token. Staking buys alpha; emission is in alpha.
 - **Root Network** (SN0): Special subnet governing emission distribution across all subnets.
-- **Commit-Reveal**: Weight privacy scheme. Commit a hash, reveal later.
+- **Commit-Reveal**: Weight privacy scheme. Commit a blake2 hash, reveal later.
 - **Take**: Percentage of delegated emissions that a validator keeps.
 
 ## Environment Variables
 
 | Variable | Default | Description |
 |---|---|---|
-| `AGCLI_NETWORK` | `finney` | Network preset |
-| `AGCLI_ENDPOINT` | — | Custom WS endpoint |
+| `AGCLI_NETWORK` | `finney` | Network preset (finney/test/local) |
+| `AGCLI_ENDPOINT` | — | Custom WS endpoint (overrides network) |
 | `AGCLI_WALLET_DIR` | `~/.bittensor/wallets` | Wallet directory |
 | `AGCLI_WALLET` | `default` | Active wallet name |
 | `AGCLI_HOTKEY` | `default` | Active hotkey name |
+| `METADATA_CHAIN_ENDPOINT` | finney | Chain endpoint for build-time metadata fetch |
+
+## Building
+
+Requires Rust 1.75+ and network access (fetches chain metadata at build time):
+
+```bash
+git clone https://github.com/unconst/agcli
+cd agcli
+cargo build --release
+```
 
 ## License
 

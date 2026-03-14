@@ -1,7 +1,7 @@
 # agcli — LLM/Agent Reference
 
 ## What is agcli?
-A Rust CLI and SDK for the Bittensor decentralized AI network. It lets you manage wallets, stake TAO, transfer tokens, register on subnets, set weights, and query chain state.
+A Rust CLI and SDK for the Bittensor decentralized AI network. It lets you manage wallets, stake TAO, transfer tokens, register on subnets, set weights, query chain state, and view identities. All data commands support `--output json` for machine-readable output.
 
 ## Installation
 ```bash
@@ -11,37 +11,77 @@ cargo install --git https://github.com/unconst/agcli
 ## Core Commands
 
 ### Wallet
-- `agcli wallet create --name NAME` — create new wallet
+- `agcli wallet create --name NAME` — create new wallet (coldkey + hotkey)
 - `agcli wallet list` — list wallets
+- `agcli wallet show --all` — show all wallets with hotkeys
 - `agcli wallet import --name NAME` — import from mnemonic
+- `agcli wallet regen-coldkey` — regenerate coldkey from mnemonic
+- `agcli wallet new-hotkey NAME` — create new hotkey
 
-### Balance
+### Balance & Transfer
 - `agcli balance` — show your balance
 - `agcli balance --address SS58` — show someone's balance
-
-### Transfer
 - `agcli transfer DEST_SS58 AMOUNT_TAO` — send TAO
 
 ### Staking
 - `agcli stake add AMOUNT --netuid N` — stake TAO on subnet
 - `agcli stake remove AMOUNT --netuid N` — unstake
-- `agcli stake list` — show all stakes
+- `agcli stake list` — show all stakes (supports --output json)
 - `agcli stake move AMOUNT --from SRC --to DST` — move between subnets
-- `agcli stake add-limit AMOUNT --netuid N --price P` — limit order
+- `agcli stake swap AMOUNT --netuid N --from-hotkey HK1 --to-hotkey HK2` — swap between hotkeys
+- `agcli stake unstake-all` — unstake all from hotkey
+- `agcli stake claim-root --netuid N` — claim root dividends
+- `agcli stake add-limit AMOUNT --netuid N --price P` — limit order stake
+- `agcli stake childkey-take PCT --netuid N` — set childkey take
+- `agcli stake set-children --netuid N --children "proportion:hotkey,..."` — set children
 
 ### Subnets
-- `agcli subnet list` — list all subnets
-- `agcli subnet metagraph N` — view subnet N's metagraph
+- `agcli subnet list` — list all subnets with real names (supports --output json)
+- `agcli subnet show N` — show subnet N details
+- `agcli subnet metagraph N` — view subnet N's metagraph (supports --output json)
+- `agcli subnet hyperparams N` — show subnet hyperparameters
 - `agcli subnet register` — create new subnet
 - `agcli subnet register-neuron N` — register on subnet N (burn)
+- `agcli subnet pow N --threads 8` — POW registration (multi-threaded)
 
 ### Weights
 - `agcli weights set --netuid N "uid:weight,..."` — set weights
-- `agcli weights commit --netuid N "uid:weight,..."` — commit-reveal
+- `agcli weights commit --netuid N "uid:weight,..."` — commit-reveal (blake2 hash)
+- `agcli weights reveal --netuid N "uid:weight,..." SALT` — reveal committed weights
+
+### Delegates
+- `agcli delegate list` — list all delegates (supports --output json)
+- `agcli delegate show --hotkey SS58` — show delegate info
+- `agcli delegate decrease-take PCT` — decrease validator take
+- `agcli delegate increase-take PCT` — increase validator take
 
 ### View
-- `agcli view portfolio` — full stake portfolio
-- `agcli view network` — network overview
+- `agcli view portfolio` — full stake portfolio (supports --output json)
+- `agcli view network` — network overview (block, issuance, stake, emission)
+- `agcli view neuron --netuid N UID` — full neuron detail
+
+### Identity
+- `agcli identity show SS58` — query on-chain identity (Registry pallet)
+- `agcli identity set-subnet N --name "Name" --github "repo"` — set subnet identity
+
+### Swap
+- `agcli swap hotkey NEW_SS58` — swap hotkey
+- `agcli swap coldkey NEW_SS58` — schedule coldkey swap
+
+### Root
+- `agcli root register` — register on root network
+- `agcli root weights "netuid:weight,..."` — set root weights
+
+## JSON Output
+Add `--output json` to any data query:
+```bash
+agcli --output json subnet list
+agcli --output json view portfolio
+agcli --output json view network
+agcli --output json stake list
+agcli --output json delegate list
+agcli --output json subnet metagraph 1
+```
 
 ## SDK Usage
 ```rust
@@ -49,13 +89,16 @@ use agcli::{Client, Wallet, Balance};
 
 let client = Client::connect("wss://entrypoint-finney.opentensor.ai:443").await?;
 let balance = client.get_balance_ss58("5Gx...").await?;
-client.add_stake(&signer, "5Hot...", 1.into(), Balance::from_tao(10.0)).await?;
+let subnets = client.get_all_subnets().await?;
+let stakes = client.get_stake_for_coldkey("5Gx...").await?;
+let metagraph = client.get_metagraph(1.into()).await?;
+let identity = client.get_subnet_identity(1.into()).await?;
 ```
 
 ## Key Concepts
 - TAO = native token, 1 TAO = 1e9 RAO
 - Subnet = independent network with netuid (u16)
-- Coldkey = main signing key (encrypted), Hotkey = automated key (plaintext)
+- Coldkey = main signing key (AES-256-GCM encrypted), Hotkey = automated key (plaintext)
 - Weights = validators score miners, u16 values normalized to [0,1]
 - Dynamic TAO = each subnet has alpha token, price determined by AMM
 - Root (SN0) = governs cross-subnet emissions

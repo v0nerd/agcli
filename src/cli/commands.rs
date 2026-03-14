@@ -11,6 +11,7 @@ use sp_core::Pair as _;
 /// Execute the parsed CLI command.
 pub async fn execute(cli: Cli) -> Result<()> {
     let network = cli.resolve_network();
+    let output = cli.output.as_str();
 
     match cli.command {
         Commands::Wallet(cmd) => handle_wallet(cmd, &cli.wallet_dir).await,
@@ -18,8 +19,12 @@ pub async fn execute(cli: Cli) -> Result<()> {
             let client = Client::connect(network.ws_url()).await?;
             let addr = resolve_coldkey_address(address, &cli.wallet_dir, &cli.wallet);
             let balance = client.get_balance_ss58(&addr).await?;
-            println!("Address: {}", addr);
-            println!("Balance: {}", balance.display_tao());
+            if output == "json" {
+                println!("{}", serde_json::json!({"address": addr, "balance_rao": balance.rao(), "balance_tao": balance.tao()}));
+            } else {
+                println!("Address: {}", addr);
+                println!("Balance: {}", balance.display_tao());
+            }
             Ok(())
         }
         Commands::Transfer { dest, amount } => {
@@ -29,16 +34,20 @@ pub async fn execute(cli: Cli) -> Result<()> {
             let balance = Balance::from_tao(amount);
             println!("Transferring {} to {}", balance.display_tao(), dest);
             let hash = client.transfer(wallet.coldkey()?, &dest, balance).await?;
-            println!("Transaction submitted: {}", hash);
+            if output == "json" {
+                println!("{}", serde_json::json!({"tx_hash": hash}));
+            } else {
+                println!("Transaction submitted: {}", hash);
+            }
             Ok(())
         }
         Commands::Stake(cmd) => {
             let client = Client::connect(network.ws_url()).await?;
-            handle_stake(cmd, &client, &cli.wallet_dir, &cli.wallet, &cli.hotkey).await
+            handle_stake(cmd, &client, &cli.wallet_dir, &cli.wallet, &cli.hotkey, output).await
         }
         Commands::Subnet(cmd) => {
             let client = Client::connect(network.ws_url()).await?;
-            handle_subnet(cmd, &client, &cli.wallet_dir, &cli.wallet, &cli.hotkey).await
+            handle_subnet(cmd, &client, &cli.wallet_dir, &cli.wallet, &cli.hotkey, output).await
         }
         Commands::Weights(cmd) => {
             let client = Client::connect(network.ws_url()).await?;
@@ -50,11 +59,11 @@ pub async fn execute(cli: Cli) -> Result<()> {
         }
         Commands::Delegate(cmd) => {
             let client = Client::connect(network.ws_url()).await?;
-            handle_delegate(cmd, &client, &cli.wallet_dir, &cli.wallet, &cli.hotkey).await
+            handle_delegate(cmd, &client, &cli.wallet_dir, &cli.wallet, &cli.hotkey, output).await
         }
         Commands::View(cmd) => {
             let client = Client::connect(network.ws_url()).await?;
-            handle_view(cmd, &client, &cli.wallet_dir, &cli.wallet).await
+            handle_view(cmd, &client, &cli.wallet_dir, &cli.wallet, output).await
         }
         Commands::Identity(cmd) => {
             let client = Client::connect(network.ws_url()).await?;
@@ -265,12 +274,15 @@ async fn handle_stake(
     wallet_dir: &str,
     wallet_name: &str,
     hotkey_name: &str,
+    output: &str,
 ) -> Result<()> {
     match cmd {
         StakeCommands::List { address } => {
             let addr = resolve_coldkey_address(address, wallet_dir, wallet_name);
             let stakes = client.get_stake_for_coldkey(&addr).await?;
-            if stakes.is_empty() {
+            if output == "json" {
+                println!("{}", serde_json::to_string_pretty(&stakes)?);
+            } else if stakes.is_empty() {
                 println!("No stakes found for {}", crate::utils::short_ss58(&addr));
             } else {
                 println!("Stakes for {}:", crate::utils::short_ss58(&addr));
@@ -533,20 +545,33 @@ async fn handle_subnet(
     wallet_dir: &str,
     wallet_name: &str,
     hotkey_name: &str,
+    output: &str,
 ) -> Result<()> {
     match cmd {
         SubnetCommands::List => {
             let subnets = client.get_all_subnets().await?;
-            if subnets.is_empty() {
+            // Resolve subnet names from SubnetIdentitiesV3
+            let mut named_subnets = subnets;
+            for s in &mut named_subnets {
+                if let Ok(Some(id)) = client.get_subnet_identity(s.netuid).await {
+                    if !id.subnet_name.is_empty() {
+                        s.name = id.subnet_name;
+                    }
+                }
+            }
+            if output == "json" {
+                println!("{}", serde_json::to_string_pretty(&named_subnets)?);
+            } else if named_subnets.is_empty() {
                 println!("No subnets found.");
             } else {
                 let mut table = comfy_table::Table::new();
                 table.set_header(vec![
-                    "NetUID", "N", "Max", "Tempo", "Emission", "Burn", "Owner",
+                    "NetUID", "Name", "N", "Max", "Tempo", "Emission", "Burn", "Owner",
                 ]);
-                for s in &subnets {
+                for s in &named_subnets {
                     table.add_row(vec![
                         format!("{}", s.netuid),
+                        s.name.clone(),
                         format!("{}", s.n),
                         format!("{}", s.max_n),
                         format!("{}", s.tempo),
@@ -562,17 +587,27 @@ async fn handle_subnet(
         SubnetCommands::Show { netuid } => {
             let info = client.get_subnet_info(NetUid(netuid)).await?;
             match info {
-                Some(s) => {
-                    println!("Subnet {} ({})", s.netuid, s.name);
-                    println!("  Symbol:        {}", s.symbol);
-                    println!("  Neurons:       {}/{}", s.n, s.max_n);
-                    println!("  Tempo:         {}", s.tempo);
-                    println!("  Emission:      {}", s.emission_value);
-                    println!("  Burn:          {}", s.burn.display_tao());
-                    println!("  Difficulty:    {}", s.difficulty);
-                    println!("  Immunity:      {} blocks", s.immunity_period);
-                    println!("  Owner:         {}", s.owner);
-                    println!("  Registration:  {}", if s.registration_allowed { "open" } else { "closed" });
+                Some(mut s) => {
+                    // Resolve real name
+                    if let Ok(Some(id)) = client.get_subnet_identity(s.netuid).await {
+                        if !id.subnet_name.is_empty() {
+                            s.name = id.subnet_name;
+                        }
+                    }
+                    if output == "json" {
+                        println!("{}", serde_json::to_string_pretty(&s)?);
+                    } else {
+                        println!("Subnet {} ({})", s.netuid, s.name);
+                        println!("  Symbol:        {}", s.symbol);
+                        println!("  Neurons:       {}/{}", s.n, s.max_n);
+                        println!("  Tempo:         {}", s.tempo);
+                        println!("  Emission:      {}", s.emission_value);
+                        println!("  Burn:          {}", s.burn.display_tao());
+                        println!("  Difficulty:    {}", s.difficulty);
+                        println!("  Immunity:      {} blocks", s.immunity_period);
+                        println!("  Owner:         {}", s.owner);
+                        println!("  Registration:  {}", if s.registration_allowed { "open" } else { "closed" });
+                    }
                 }
                 None => println!("Subnet {} not found.", netuid),
             }
@@ -657,27 +692,31 @@ async fn handle_subnet(
         }
         SubnetCommands::Metagraph { netuid } => {
             let mg = crate::queries::fetch_metagraph(client, netuid.into()).await?;
-            println!(
-                "Metagraph SN{} — {} neurons, block {}",
-                netuid, mg.n, mg.block
-            );
-            let mut table = comfy_table::Table::new();
-            table.set_header(vec![
-                "UID", "Hotkey", "Stake", "Rank", "Trust", "Incentive", "Emission", "VP",
-            ]);
-            for n in &mg.neurons {
-                table.add_row(vec![
-                    format!("{}", n.uid),
-                    crate::utils::short_ss58(&n.hotkey),
-                    format!("{:.4}τ", n.stake.tao()),
-                    format!("{:.4}", n.rank),
-                    format!("{:.4}", n.trust),
-                    format!("{:.4}", n.incentive),
-                    format!("{:.0}", n.emission),
-                    if n.validator_permit { "Y" } else { "" }.to_string(),
+            if output == "json" {
+                println!("{}", serde_json::to_string_pretty(&mg)?);
+            } else {
+                println!(
+                    "Metagraph SN{} — {} neurons, block {}",
+                    netuid, mg.n, mg.block
+                );
+                let mut table = comfy_table::Table::new();
+                table.set_header(vec![
+                    "UID", "Hotkey", "Stake", "Rank", "Trust", "Incentive", "Emission", "VP",
                 ]);
+                for n in &mg.neurons {
+                    table.add_row(vec![
+                        format!("{}", n.uid),
+                        crate::utils::short_ss58(&n.hotkey),
+                        format!("{:.4}τ", n.stake.tao()),
+                        format!("{:.4}", n.rank),
+                        format!("{:.4}", n.trust),
+                        format!("{:.4}", n.incentive),
+                        format!("{:.0}", n.emission),
+                        if n.validator_permit { "Y" } else { "" }.to_string(),
+                    ]);
+                }
+                println!("{table}");
             }
-            println!("{table}");
             Ok(())
         }
         SubnetCommands::Register => {
@@ -706,9 +745,61 @@ async fn handle_subnet(
             println!("Neuron registered. Tx: {}", hash);
             Ok(())
         }
-        SubnetCommands::Pow { netuid, threads: _ } => {
-            println!("POW registration not yet implemented.");
-            println!("Use 'agcli subnet register-neuron {}' for burn registration.", netuid);
+        SubnetCommands::Pow { netuid, threads } => {
+            let mut wallet = open_wallet(wallet_dir, wallet_name)?;
+            unlock_coldkey(&mut wallet)?;
+            let hotkey_ss58 = resolve_hotkey_ss58(None, &mut wallet, hotkey_name)?;
+            let hotkey_pk = crate::wallet::keypair::from_ss58(&hotkey_ss58)?;
+
+            println!("POW registration on SN{} with {} threads", netuid, threads);
+            println!("Fetching block info and difficulty...");
+
+            let (block_number, block_hash) = client.get_block_info_for_pow().await?;
+            let difficulty = client.get_difficulty(NetUid(netuid)).await?;
+            println!("Difficulty: {}, Block: #{} (0x{})", difficulty, block_number, hex::encode(block_hash));
+
+            let attempts_per_thread = 10_000_000u64;
+            let mut handles = Vec::new();
+            for t in 0..threads {
+                let bh = block_hash;
+                let hk = hotkey_pk.0;
+                let diff = difficulty;
+                let offset = t as u64 * attempts_per_thread;
+                handles.push(std::thread::spawn(move || {
+                    crate::utils::pow::solve_pow_range(&bh, &hk, diff, offset, attempts_per_thread)
+                }));
+            }
+
+            let mut result = None;
+            for handle in handles {
+                if let Some(found) = handle.join().map_err(|_| anyhow::anyhow!("thread panic"))? {
+                    result = Some(found);
+                    break;
+                }
+            }
+
+            match result {
+                Some((nonce, work)) => {
+                    println!("POW solved! Nonce: {}", nonce);
+                    let hash = client
+                        .pow_register(
+                            wallet.coldkey()?,
+                            NetUid(netuid),
+                            &hotkey_ss58,
+                            block_number,
+                            nonce,
+                            work,
+                        )
+                        .await?;
+                    println!("POW registered. Tx: {}", hash);
+                }
+                None => {
+                    println!(
+                        "POW not found after {} attempts per thread. Try again or use burn registration.",
+                        attempts_per_thread
+                    );
+                }
+            }
             Ok(())
         }
     }
@@ -876,29 +967,34 @@ async fn handle_delegate(
     wallet_dir: &str,
     wallet_name: &str,
     hotkey_name: &str,
+    output: &str,
 ) -> Result<()> {
     match cmd {
         DelegateCommands::List => {
             let delegates = client.get_delegates().await?;
-            println!("{} delegates", delegates.len());
-            let mut table = comfy_table::Table::new();
-            table.set_header(vec![
-                "Hotkey",
-                "Owner",
-                "Take",
-                "Total Stake",
-                "Nominators",
-            ]);
-            for d in delegates.iter().take(50) {
-                table.add_row(vec![
-                    crate::utils::short_ss58(&d.hotkey),
-                    crate::utils::short_ss58(&d.owner),
-                    format!("{:.2}%", d.take * 100.0),
-                    d.total_stake.display_tao(),
-                    format!("{}", d.nominators.len()),
+            if output == "json" {
+                println!("{}", serde_json::to_string_pretty(&delegates)?);
+            } else {
+                println!("{} delegates", delegates.len());
+                let mut table = comfy_table::Table::new();
+                table.set_header(vec![
+                    "Hotkey",
+                    "Owner",
+                    "Take",
+                    "Total Stake",
+                    "Nominators",
                 ]);
+                for d in delegates.iter().take(50) {
+                    table.add_row(vec![
+                        crate::utils::short_ss58(&d.hotkey),
+                        crate::utils::short_ss58(&d.owner),
+                        format!("{:.2}%", d.take * 100.0),
+                        d.total_stake.display_tao(),
+                        format!("{}", d.nominators.len()),
+                    ]);
+                }
+                println!("{table}");
             }
-            println!("{table}");
             Ok(())
         }
         DelegateCommands::Show { hotkey } => {
@@ -978,30 +1074,35 @@ async fn handle_view(
     client: &Client,
     wallet_dir: &str,
     wallet_name: &str,
+    output: &str,
 ) -> Result<()> {
     match cmd {
         ViewCommands::Portfolio { address } => {
             let addr = resolve_coldkey_address(address, wallet_dir, wallet_name);
             let portfolio = crate::queries::portfolio::fetch_portfolio(client, &addr).await?;
-            println!("Portfolio for {}", crate::utils::short_ss58(&addr));
-            println!("  Free:   {}", portfolio.free_balance.display_tao());
-            println!("  Staked: {}", portfolio.total_staked.display_tao());
-            println!(
-                "  Total:  {}",
-                (portfolio.free_balance + portfolio.total_staked).display_tao()
-            );
-            if !portfolio.positions.is_empty() {
-                let mut table = comfy_table::Table::new();
-                table.set_header(vec!["Subnet", "Hotkey", "Alpha", "TAO Equiv"]);
-                for p in &portfolio.positions {
-                    table.add_row(vec![
-                        format!("SN{}", p.netuid),
-                        crate::utils::short_ss58(&p.hotkey_ss58),
-                        format!("{}", p.alpha_stake),
-                        format!("{}", p.tao_equivalent),
-                    ]);
+            if output == "json" {
+                println!("{}", serde_json::to_string_pretty(&portfolio)?);
+            } else {
+                println!("Portfolio for {}", crate::utils::short_ss58(&addr));
+                println!("  Free:   {}", portfolio.free_balance.display_tao());
+                println!("  Staked: {}", portfolio.total_staked.display_tao());
+                println!(
+                    "  Total:  {}",
+                    (portfolio.free_balance + portfolio.total_staked).display_tao()
+                );
+                if !portfolio.positions.is_empty() {
+                    let mut table = comfy_table::Table::new();
+                    table.set_header(vec!["Subnet", "Hotkey", "Alpha", "TAO Equiv"]);
+                    for p in &portfolio.positions {
+                        table.add_row(vec![
+                            format!("SN{}", p.netuid),
+                            crate::utils::short_ss58(&p.hotkey_ss58),
+                            format!("{}", p.alpha_stake),
+                            format!("{}", p.tao_equivalent),
+                        ]);
+                    }
+                    println!("{table}");
                 }
-                println!("{table}");
             }
             Ok(())
         }
@@ -1011,18 +1112,31 @@ async fn handle_view(
             let total_networks = client.get_total_networks().await?;
             let total_issuance = client.get_total_issuance().await?;
             let emission = client.get_block_emission().await?;
-            println!("Network Overview");
-            println!("  Block:        {}", block);
-            println!("  Subnets:      {}", total_networks);
-            println!("  Total issued: {}", total_issuance.display_tao());
-            println!("  Total staked: {}", total_stake.display_tao());
-            println!("  Emission/blk: {}", emission.display_tao());
             let staking_ratio = if total_issuance.rao() > 0 {
                 total_stake.tao() / total_issuance.tao() * 100.0
             } else {
                 0.0
             };
-            println!("  Staking ratio: {:.1}%", staking_ratio);
+            if output == "json" {
+                println!("{}", serde_json::json!({
+                    "block": block,
+                    "subnets": total_networks,
+                    "total_issuance_rao": total_issuance.rao(),
+                    "total_issuance_tao": total_issuance.tao(),
+                    "total_stake_rao": total_stake.rao(),
+                    "total_stake_tao": total_stake.tao(),
+                    "emission_per_block_rao": emission.rao(),
+                    "staking_ratio_pct": staking_ratio,
+                }));
+            } else {
+                println!("Network Overview");
+                println!("  Block:        {}", block);
+                println!("  Subnets:      {}", total_networks);
+                println!("  Total issued: {}", total_issuance.display_tao());
+                println!("  Total staked: {}", total_stake.display_tao());
+                println!("  Emission/blk: {}", emission.display_tao());
+                println!("  Staking ratio: {:.1}%", staking_ratio);
+            }
             Ok(())
         }
         ViewCommands::Neuron { netuid, uid } => {
@@ -1093,20 +1207,12 @@ async fn handle_identity(
             github,
             description,
         } => {
-            let mut wallet = open_wallet(wallet_dir, wallet_name)?;
-            unlock_coldkey(&mut wallet)?;
-            let identity = crate::types::chain_data::ChainIdentity {
-                name,
-                url: url.unwrap_or_default(),
-                github: github.unwrap_or_default(),
-                image: String::new(),
-                discord: String::new(),
-                description: description.unwrap_or_default(),
-                additional: String::new(),
-            };
-            println!("Setting on-chain identity: {}", identity.name);
-            let hash = client.set_identity(wallet.coldkey()?, &identity).await?;
-            println!("Identity set. Tx: {}", hash);
+            // Identity::Set maps to SubtensorModule::set_identity for subnet identity
+            // For account-level identity, the Registry pallet is used (not currently wired)
+            println!("Note: Account-level identity uses the Registry pallet.");
+            println!("Use 'agcli identity set-subnet' for subnet identity.");
+            println!("Name: {}, URL: {:?}, GitHub: {:?}", name, url, github);
+            let _ = description;
             Ok(())
         }
         IdentityCommands::SetSubnet {
@@ -1115,11 +1221,22 @@ async fn handle_identity(
             github,
             url,
         } => {
-            println!(
-                "Setting subnet identity for SN{}: name={}, github={:?}, url={:?}",
-                netuid, name, github, url
-            );
-            println!("Subnet identity setting not yet fully wired to chain.");
+            let mut wallet = open_wallet(wallet_dir, wallet_name)?;
+            unlock_coldkey(&mut wallet)?;
+            let identity = crate::types::chain_data::SubnetIdentity {
+                subnet_name: name.clone(),
+                github_repo: github.unwrap_or_default(),
+                subnet_contact: String::new(),
+                subnet_url: url.unwrap_or_default(),
+                discord: String::new(),
+                description: String::new(),
+                additional: String::new(),
+            };
+            println!("Setting subnet identity for SN{}: {}", netuid, name);
+            let hash = client
+                .set_subnet_identity(wallet.coldkey()?, NetUid(netuid), &identity)
+                .await?;
+            println!("Subnet identity set. Tx: {}", hash);
             Ok(())
         }
     }

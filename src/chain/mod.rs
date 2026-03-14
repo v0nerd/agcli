@@ -209,16 +209,44 @@ impl Client {
 
     // ──────── Identity Queries ────────
 
-    /// Get on-chain identity for an account.
-    pub async fn get_identity(&self, _ss58: &str) -> Result<Option<ChainIdentity>> {
-        // TODO: map to correct storage key once identity pallet schema is confirmed
-        Ok(None)
+    /// Get on-chain identity for an account (from Registry pallet).
+    pub async fn get_identity(&self, ss58: &str) -> Result<Option<ChainIdentity>> {
+        let account_id = Self::ss58_to_account_id(ss58)?;
+        let addr = api::storage().registry().identity_of(&account_id);
+        let result = self.inner.storage().at_latest().await?.fetch(&addr).await?;
+        Ok(result.map(|reg| {
+            let info = reg.info;
+            ChainIdentity {
+                name: decode_identity_data(&info.display),
+                url: decode_identity_data(&info.web),
+                github: String::new(), // Registry pallet doesn't have github field
+                image: decode_identity_data(&info.image),
+                discord: decode_identity_data(&info.riot),
+                description: String::new(),
+                additional: info
+                    .additional
+                    .0
+                    .iter()
+                    .map(|(k, v)| format!("{}={}", decode_identity_data(k), decode_identity_data(v)))
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            }
+        }))
     }
 
-    /// Get subnet identity.
-    pub async fn get_subnet_identity(&self, _netuid: NetUid) -> Result<Option<SubnetIdentity>> {
-        // TODO: map to correct storage key
-        Ok(None)
+    /// Get subnet identity (from SubtensorModule SubnetIdentitiesV3).
+    pub async fn get_subnet_identity(&self, netuid: NetUid) -> Result<Option<SubnetIdentity>> {
+        let addr = api::storage().subtensor_module().subnet_identities_v3(netuid.0);
+        let result = self.inner.storage().at_latest().await?.fetch(&addr).await?;
+        Ok(result.map(|id| SubnetIdentity {
+            subnet_name: String::from_utf8_lossy(&id.subnet_name).to_string(),
+            github_repo: String::from_utf8_lossy(&id.github_repo).to_string(),
+            subnet_contact: String::from_utf8_lossy(&id.subnet_contact).to_string(),
+            subnet_url: String::from_utf8_lossy(&id.subnet_url).to_string(),
+            discord: String::from_utf8_lossy(&id.discord).to_string(),
+            description: String::from_utf8_lossy(&id.description).to_string(),
+            additional: String::from_utf8_lossy(&id.additional).to_string(),
+        }))
     }
 
     // ──────── Extrinsic Submission ────────
@@ -658,22 +686,124 @@ impl Client {
         Ok(format!("{:?}", result.extrinsic_hash()))
     }
 
-    /// Set on-chain identity.
-    pub async fn set_identity(
+    /// Set subnet identity (subnet owner only).
+    /// Calls SubtensorModule::set_identity(name, url, github_repo, image, discord, description, additional).
+    pub async fn set_subnet_identity(
         &self,
-        _signer: &sr25519::Pair,
-        _identity: &ChainIdentity,
+        signer_pair: &sr25519::Pair,
+        _netuid: NetUid,
+        identity: &SubnetIdentity,
     ) -> Result<String> {
-        anyhow::bail!("set_identity requires chain-specific identity type mapping — TODO")
+        let tx = api::tx().subtensor_module().set_identity(
+            identity.subnet_name.as_bytes().to_vec(),
+            identity.subnet_url.as_bytes().to_vec(),
+            identity.github_repo.as_bytes().to_vec(),
+            Vec::new(), // image
+            identity.discord.as_bytes().to_vec(),
+            identity.description.as_bytes().to_vec(),
+            identity.additional.as_bytes().to_vec(),
+        );
+        let signer = Self::signer(signer_pair);
+        let result = self.inner.tx()
+            .sign_and_submit_then_watch_default(&tx, &signer).await?
+            .wait_for_finalized_success().await?;
+        Ok(format!("{:?}", result.extrinsic_hash()))
     }
 
     /// Get total hotkey alpha on a subnet.
     pub async fn get_total_hotkey_alpha(
         &self,
-        _hotkey_ss58: &str,
-        _netuid: NetUid,
+        hotkey_ss58: &str,
+        netuid: NetUid,
     ) -> Result<Balance> {
-        // Alpha storage uses FixedU128 which requires special handling
-        Ok(Balance::ZERO)
+        let hotkey_id = Self::ss58_to_account_id(hotkey_ss58)?;
+        let addr = api::storage()
+            .subtensor_module()
+            .total_hotkey_alpha(&hotkey_id, netuid.0);
+        let val = self.inner.storage().at_latest().await?.fetch(&addr).await?;
+        // Alpha storage returns u64 raw value
+        Ok(Balance::from_rao(val.unwrap_or(0)))
+    }
+
+    /// POW register on a subnet.
+    pub async fn pow_register(
+        &self,
+        signer_pair: &sr25519::Pair,
+        netuid: NetUid,
+        hotkey_ss58: &str,
+        block_number: u64,
+        nonce: u64,
+        work: [u8; 32],
+    ) -> Result<String> {
+        let hotkey_id = Self::ss58_to_account_id(hotkey_ss58)?;
+        let coldkey_id = AccountId::from(signer_pair.public().0);
+        let tx = api::tx().subtensor_module().register(
+            netuid.0,
+            block_number,
+            nonce,
+            work.to_vec(),
+            hotkey_id,
+            coldkey_id,
+        );
+        let signer = Self::signer(signer_pair);
+        let result = self.inner.tx()
+            .sign_and_submit_then_watch_default(&tx, &signer).await?
+            .wait_for_finalized_success().await?;
+        Ok(format!("{:?}", result.extrinsic_hash()))
+    }
+
+    /// Get the current block number and hash for POW solving.
+    pub async fn get_block_info_for_pow(&self) -> Result<(u64, [u8; 32])> {
+        let block = self.inner.blocks().at_latest().await?;
+        Ok((block.number() as u64, block.hash().0))
+    }
+
+    /// Get registration difficulty for a subnet.
+    pub async fn get_difficulty(&self, netuid: NetUid) -> Result<u64> {
+        let addr = api::storage().subtensor_module().difficulty(netuid.0);
+        let val = self.inner.storage().at_latest().await?.fetch(&addr).await?;
+        Ok(val.unwrap_or(10_000_000))
+    }
+}
+
+/// Decode the Registry pallet `Data` enum to a string.
+fn decode_identity_data(data: &api::runtime_types::pallet_registry::types::Data) -> String {
+    use api::runtime_types::pallet_registry::types::Data;
+    match data {
+        Data::None => String::new(),
+        Data::Raw0(b) => String::from_utf8_lossy(b).to_string(),
+        Data::Raw1(b) => String::from_utf8_lossy(b).to_string(),
+        Data::Raw2(b) => String::from_utf8_lossy(b).to_string(),
+        Data::Raw3(b) => String::from_utf8_lossy(b).to_string(),
+        Data::Raw4(b) => String::from_utf8_lossy(b).to_string(),
+        Data::Raw5(b) => String::from_utf8_lossy(b).to_string(),
+        Data::Raw6(b) => String::from_utf8_lossy(b).to_string(),
+        Data::Raw7(b) => String::from_utf8_lossy(b).to_string(),
+        Data::Raw8(b) => String::from_utf8_lossy(b).to_string(),
+        Data::Raw9(b) => String::from_utf8_lossy(b).to_string(),
+        Data::Raw10(b) => String::from_utf8_lossy(b).to_string(),
+        Data::Raw11(b) => String::from_utf8_lossy(b).to_string(),
+        Data::Raw12(b) => String::from_utf8_lossy(b).to_string(),
+        Data::Raw13(b) => String::from_utf8_lossy(b).to_string(),
+        Data::Raw14(b) => String::from_utf8_lossy(b).to_string(),
+        Data::Raw15(b) => String::from_utf8_lossy(b).to_string(),
+        Data::Raw16(b) => String::from_utf8_lossy(b).to_string(),
+        Data::Raw17(b) => String::from_utf8_lossy(b).to_string(),
+        Data::Raw18(b) => String::from_utf8_lossy(b).to_string(),
+        Data::Raw19(b) => String::from_utf8_lossy(b).to_string(),
+        Data::Raw20(b) => String::from_utf8_lossy(b).to_string(),
+        Data::Raw21(b) => String::from_utf8_lossy(b).to_string(),
+        Data::Raw22(b) => String::from_utf8_lossy(b).to_string(),
+        Data::Raw23(b) => String::from_utf8_lossy(b).to_string(),
+        Data::Raw24(b) => String::from_utf8_lossy(b).to_string(),
+        Data::Raw25(b) => String::from_utf8_lossy(b).to_string(),
+        Data::Raw26(b) => String::from_utf8_lossy(b).to_string(),
+        Data::Raw27(b) => String::from_utf8_lossy(b).to_string(),
+        Data::Raw28(b) => String::from_utf8_lossy(b).to_string(),
+        Data::Raw29(b) => String::from_utf8_lossy(b).to_string(),
+        Data::Raw30(b) => String::from_utf8_lossy(b).to_string(),
+        Data::Raw31(b) => String::from_utf8_lossy(b).to_string(),
+        Data::Raw32(b) => String::from_utf8_lossy(b).to_string(),
+        _ => format!("<hash:{:?}>", data),
     }
 }
