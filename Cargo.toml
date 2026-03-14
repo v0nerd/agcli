@@ -1,0 +1,70 @@
+[package]
+name = "agcli"
+version = "0.1.0"
+edition = "2021"
+description = "Rust CLI + SDK for the Bittensor network — staking, transfers, wallets, weights, subnets, and more"
+license = "MIT"
+repository = "https://github.com/arbos-ai/agcli"
+keywords = ["bittensor", "tao", "substrate", "staking", "blockchain"]
+categories = ["command-line-utilities", "cryptography::cryptocurrencies"]
+
+[dependencies]
+# Substrate / chain interaction
+subxt = { version = "0.38", features = ["substrate-compat"] }
+sp-core = { version = "34", default-features = false, features = ["std"] }
+sp-runtime = { version = "39", default-features = false, features = ["std"] }
+codec = { package = "parity-scale-codec", version = "3.7", features = ["derive"] }
+
+# Crypto
+bip39 = "2"
+schnorrkel = "0.11"
+blake2 = "0.10"
+sha2 = "0.10"
+aes-gcm = "0.10"
+argon2 = "0.5"
+rand = "0.8"
+zeroize = { version = "1", features = ["derive"] }
+ss58-registry = "1"
+bs58 = "0.5"
+
+# CLI
+clap = { version = "4", features = ["derive", "env", "wrap_help"] }
+comfy-table = "7"
+indicatif = "0.17"
+console = "0.15"
+dialoguer = "0.11"
+colored = "2"
+
+# Async
+tokio = { version = "1", features = ["full"] }
+futures = "0.3"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+hex = "0.4"
+
+# HTTP / WebSocket
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Utilities
+thiserror = "2"
+anyhow = "1"
+chrono = "0.4"
+dirs = "6"
+num-format = "0.4"
+
+[profile.release]
+opt-level = "z"
+lto = true
+strip = true
+
+[features]
+default = ["cli"]
+cli = []
+sdk-only = []

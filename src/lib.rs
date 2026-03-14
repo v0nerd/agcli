@@ -1,0 +1,35 @@
+//! # agcli — Rust SDK + CLI for the Bittensor Network
+//!
+//! `agcli` provides a complete toolkit for interacting with the Bittensor
+//! blockchain (subtensor). It covers wallet management, staking, transfers,
+//! subnet operations, weight setting, registration, and chain queries.
+//!
+//! ## Quick Start (SDK)
+//!
+//! ```rust,no_run
+//! use agcli::{Client, Wallet};
+//!
+//! #[tokio::main]
+//! async fn main() -> anyhow::Result<()> {
+//!     let client = Client::connect("wss://entrypoint-finney.opentensor.ai:443").await?;
+//!     let wallet = Wallet::open("~/.bittensor/wallets/default")?;
+//!     let balance = client.get_balance(&wallet.coldkey_public()).await?;
+//!     println!("Balance: {} TAO", balance.tao());
+//!     Ok(())
+//! }
+//! ```
+
+pub mod chain;
+pub mod extrinsics;
+pub mod queries;
+pub mod types;
+pub mod utils;
+pub mod wallet;
+
+#[cfg(feature = "cli")]
+pub mod cli;
+
+// Re-exports for ergonomic SDK use
+pub use chain::Client;
+pub use types::balance::Balance;
+pub use wallet::Wallet;

@@ -1,0 +1,66 @@
+# agcli — LLM/Agent Reference
+
+## What is agcli?
+A Rust CLI and SDK for the Bittensor decentralized AI network. It lets you manage wallets, stake TAO, transfer tokens, register on subnets, set weights, and query chain state.
+
+## Installation
+```bash
+cargo install --git https://github.com/arbos-ai/agcli
+```
+
+## Core Commands
+
+### Wallet
+- `agcli wallet create --name NAME` — create new wallet
+- `agcli wallet list` — list wallets
+- `agcli wallet import --name NAME` — import from mnemonic
+
+### Balance
+- `agcli balance` — show your balance
+- `agcli balance --address SS58` — show someone's balance
+
+### Transfer
+- `agcli transfer DEST_SS58 AMOUNT_TAO` — send TAO
+
+### Staking
+- `agcli stake add AMOUNT --netuid N` — stake TAO on subnet
+- `agcli stake remove AMOUNT --netuid N` — unstake
+- `agcli stake list` — show all stakes
+- `agcli stake move AMOUNT --from SRC --to DST` — move between subnets
+- `agcli stake add-limit AMOUNT --netuid N --price P` — limit order
+
+### Subnets
+- `agcli subnet list` — list all subnets
+- `agcli subnet metagraph N` — view subnet N's metagraph
+- `agcli subnet register` — create new subnet
+- `agcli subnet register-neuron N` — register on subnet N (burn)
+
+### Weights
+- `agcli weights set --netuid N "uid:weight,..."` — set weights
+- `agcli weights commit --netuid N "uid:weight,..."` — commit-reveal
+
+### View
+- `agcli view portfolio` — full stake portfolio
+- `agcli view network` — network overview
+
+## SDK Usage
+```rust
+use agcli::{Client, Wallet, Balance};
+
+let client = Client::connect("wss://entrypoint-finney.opentensor.ai:443").await?;
+let balance = client.get_balance_ss58("5Gx...").await?;
+client.add_stake(&signer, "5Hot...", 1.into(), Balance::from_tao(10.0)).await?;
+```
+
+## Key Concepts
+- TAO = native token, 1 TAO = 1e9 RAO
+- Subnet = independent network with netuid (u16)
+- Coldkey = main signing key (encrypted), Hotkey = automated key (plaintext)
+- Weights = validators score miners, u16 values normalized to [0,1]
+- Dynamic TAO = each subnet has alpha token, price determined by AMM
+- Root (SN0) = governs cross-subnet emissions
+
+## Networks
+- finney: wss://entrypoint-finney.opentensor.ai:443 (mainnet)
+- test: wss://test.finney.opentensor.ai:443
+- local: ws://127.0.0.1:9944
