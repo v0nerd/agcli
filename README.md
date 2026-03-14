@@ -26,8 +26,11 @@ Covers everything: wallet management, staking, transfers, subnet operations, wei
 | **Multisig** | Derive multisig address, submit/approve multisig calls |
 | **Validators** | Top validators overview by stake (per-subnet or global) |
 | **History** | Transaction history via Subscan API |
+| **Account** | Detailed account explorer — balance, stakes, identity, delegate info |
+| **Analytics** | Subnet analytics (miner/validator stats, economics) + staking analytics (APY, projections) |
 | **Wizard** | Interactive staking wizard — shows top subnets, guided flow |
 | **Completions** | Shell completions for bash, zsh, fish, powershell |
+| **Update** | Self-update via `agcli update` (cargo install from GitHub) |
 | **Output** | Table (default), JSON (`--output json`), CSV (`--output csv`) |
 
 ## Quick Start
@@ -141,6 +144,18 @@ agcli multisig submit --others "5Addr2...,5Addr3..." --threshold 2 \
 agcli multisig approve --others "5Addr2...,5Addr3..." --threshold 2 \
   --call-hash 0xabcdef...
 
+# Account explorer (balance, stakes, identity, delegate info)
+agcli view account --address 5Gx...
+
+# Subnet analytics (miners, validators, economics, top performers)
+agcli view subnet-analytics 1
+
+# Staking analytics (APY estimates, emission projections)
+agcli view staking-analytics --address 5Gx...
+
+# Self-update to latest version
+agcli update
+
 # Shell completions
 agcli completions bash > /etc/bash_completion.d/agcli
 agcli completions zsh > ~/.zfunc/_agcli
@@ -225,8 +240,12 @@ agcli/
 │   │   ├── format.rs      # SS58 truncation, weight conversion
 │   │   └── pow.rs         # POW solver (multi-threaded)
 │   └── cli/             # CLI definitions
-│       ├── mod.rs         # Clap parser: 14 command groups, 60+ subcommands
-│       └── commands.rs    # Command handlers with JSON/CSV/live support
+│       ├── mod.rs         # Clap parser: 15 command groups, 65+ subcommands
+│       ├── commands.rs    # Main dispatcher + subnet/weights/delegate/identity/swap/config/multisig
+│       ├── helpers.rs     # Shared helpers (wallet open/unlock, hotkey resolve, parsers)
+│       ├── wallet_cmds.rs # Wallet command handlers
+│       ├── stake_cmds.rs  # Stake command handlers + staking wizard
+│       └── view_cmds.rs   # View handlers (portfolio, analytics, account, history)
 ├── docs/
 │   ├── llm.txt          # Agent-friendly docs
 │   └── tutorials/

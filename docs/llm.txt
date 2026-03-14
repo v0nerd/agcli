@@ -117,6 +117,24 @@ cargo install --git https://github.com/unconst/agcli
 - `agcli multisig submit --others "SS58_2,SS58_3" --threshold 2 --pallet Balances --call transfer_allow_death --args '[...]'` — submit call
 - `agcli multisig approve --others "SS58_2,SS58_3" --threshold 2 --call-hash 0xabc...` — approve pending call
 
+### Account Explorer
+- `agcli view account` — full account view: balance, stakes, identity, delegate status
+- `agcli view account --address SS58` — explore any account
+
+### Subnet Analytics
+- `agcli view subnet-analytics N` — detailed subnet analysis
+- Shows: neuron count, validator/miner split, unique owners, capacity
+- Economics: stake, emission, trust, incentive averages
+- Top 5 miners by incentive, top 5 validators by dividends
+
+### Staking Analytics
+- `agcli view staking-analytics` — APY and yield estimates for your stakes
+- `agcli view staking-analytics --address SS58` — for any address
+- Shows: estimated daily/monthly/yearly yield, weighted APY, per-position breakdown
+
+### Self-Update
+- `agcli update` — self-update to latest version from GitHub
+
 ### Shell Completions
 - `agcli completions bash` — generate bash completions
 - `agcli completions zsh` — generate zsh completions

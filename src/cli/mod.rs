@@ -1,6 +1,10 @@
 //! CLI command definitions and handlers.
 
 pub mod commands;
+pub mod helpers;
+pub mod wallet_cmds;
+pub mod stake_cmds;
+pub mod view_cmds;
 
 use clap::{Parser, Subcommand};
 use crate::types::network::Network;
@@ -131,6 +135,10 @@ pub enum Commands {
         #[arg(value_parser = ["bash", "zsh", "fish", "powershell"])]
         shell: String,
     },
+
+    // ──── Update ────
+    /// Self-update agcli to the latest version from GitHub
+    Update,
 }
 
 #[derive(Subcommand, Debug)]
@@ -464,6 +472,23 @@ pub enum ViewCommands {
         /// Number of transactions to show
         #[arg(long, default_value = "20")]
         limit: usize,
+    },
+    /// Detailed account explorer (balance, stakes, identity, registrations)
+    Account {
+        /// SS58 address (defaults to wallet coldkey)
+        #[arg(long)]
+        address: Option<String>,
+    },
+    /// Subnet analytics (emission rates, top miners/validators, stats)
+    SubnetAnalytics {
+        /// Subnet UID
+        netuid: u16,
+    },
+    /// Staking analytics (APY estimates, emission projections)
+    StakingAnalytics {
+        /// Coldkey SS58 (defaults to wallet coldkey)
+        #[arg(long)]
+        address: Option<String>,
     },
 }
 
