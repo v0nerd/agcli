@@ -7,21 +7,24 @@ Covers everything: wallet management, staking, transfers, subnet operations, wei
 
 | Category | Capabilities |
 |---|---|
-| **Wallet** | Create, import (mnemonic/seed), encrypt/decrypt coldkeys, manage multiple hotkeys, **Python wallet compat** (NaCl SecretBox keyfiles) |
-| **Staking** | Add/remove stake, move between subnets, swap between hotkeys, limit orders, swap-limit, claim root dividends, recycle alpha, unstake-all-alpha, burn alpha |
+| **Wallet** | Create, import (mnemonic/seed), encrypt/decrypt coldkeys, manage multiple hotkeys, sign/verify messages, derive addresses, **Python wallet compat** (NaCl SecretBox keyfiles) |
+| **Staking** | Add/remove stake, move between subnets, swap between hotkeys, limit orders, swap-limit, claim root dividends, recycle alpha, unstake-all-alpha, burn alpha, **slippage protection** (`--max-slippage`), **spending limits** |
 | **Transfers** | Send TAO, transfer-all (full balance minus fees) |
-| **Subnets** | List subnets with real names, view metagraph, register neurons (burn/POW), create/dissolve subnets, hyperparameters |
+| **Subnets** | List subnets with real names, view metagraph (full or single UID), register neurons (burn/POW), create/dissolve subnets, hyperparameters |
+| **Subnet Ops** | **Live watch** (tempo countdown, rate limits), **liquidity dashboard** (AMM depth, slippage), **monitor** (UID tracking, anomaly detection), **health/emissions/cost** dashboards |
 | **Dynamic TAO** | Real-time subnet pricing, TAO/Alpha pool balances, emission breakdown, subnet volume |
-| **Weights** | Set weights, commit-reveal with blake2 hashing, reveal operations, **batch set/commit/reveal** |
+| **Weights** | Set weights, commit-reveal, reveal, **atomic commit-reveal** (commit+wait+auto-reveal), **dry-run** pre-flight checks, **batch set/commit/reveal** |
 | **Delegates** | View delegates, manage take rates, childkey delegation |
 | **Identity** | Query on-chain identity (Registry pallet), set/view subnet identity (SubnetIdentitiesV3) |
 | **Queries** | Portfolio view (with prices), neuron info, network overview, dynamic info |
 | **Live Mode** | `--live` polling with delta tracking for dynamic, metagraph, portfolio |
-| **Events** | Real-time block/event subscription with filtering (staking, transfer, weights, etc.) |
+| **Events** | Real-time block/event subscription with filtering by category, **netuid**, **account** |
+| **Balance Watch** | `--watch N --threshold T` — low-balance monitoring with JSON alerts |
+| **Explain** | Built-in Bittensor concept reference (18 topics: tempo, commit-reveal, AMM, bootstrap, etc.) |
 | **Key Swaps** | Hotkey swap, coldkey swap (scheduled) |
 | **Root** | Root registration, root weights |
 | **Raw Calls** | Submit to any pallet via dynamic dispatch (EVM, MEV Shield, Contracts) |
-| **Config** | Persistent settings (`~/.agcli/config.toml`), set/unset/show config values |
+| **Config** | Persistent settings (`~/.agcli/config.toml`), batch mode, spending limits |
 | **Proxy** | Wrap any extrinsic through Proxy.proxy, add/remove/list proxy accounts |
 | **Serve** | Set axon endpoint (IP/port/protocol) for miners on subnets |
 | **Multisig** | Derive multisig address, submit/approve multisig calls |
@@ -35,7 +38,8 @@ Covers everything: wallet management, staking, transfers, subnet operations, wei
 | **Nominations** | View who nominates/delegates to a hotkey |
 | **Crowdloan** | Contribute, withdraw, finalize crowdloans |
 | **Update** | Self-update via `agcli update` (cargo install from GitHub) |
-| **Output** | Table (default), JSON (`--output json`), CSV (`--output csv`) |
+| **Agent Mode** | `--batch` (hard errors, no stdin), `--pretty` (pretty JSON), structured error JSON, spending limits, fully non-interactive |
+| **Output** | Table (default), JSON (`--output json`), CSV (`--output csv`), `--pretty` for formatted JSON |
 
 ## Quick Start
 

@@ -60,7 +60,7 @@ pub async fn handle_view(
 async fn handle_portfolio(client: &Client, addr: &str, output: &str) -> Result<()> {
     let portfolio = crate::queries::portfolio::fetch_portfolio(client, addr).await?;
     if output == "json" {
-        println!("{}", serde_json::to_string_pretty(&portfolio)?);
+        print_json_ser(&portfolio);
     } else if output == "csv" {
         println!("netuid,subnet_name,hotkey,alpha_stake,tao_equiv_rao,price");
         for p in &portfolio.positions {
@@ -130,7 +130,7 @@ async fn handle_network(client: &Client, output: &str) -> Result<()> {
 async fn handle_dynamic(client: &Client, output: &str) -> Result<()> {
     let dynamic = client.get_all_dynamic_info().await?;
     if output == "json" {
-        println!("{}", serde_json::to_string_pretty(&dynamic)?);
+        print_json_ser(&dynamic);
     } else if output == "csv" {
         println!("netuid,name,symbol,tempo,price,tao_in_rao,alpha_in,alpha_out,emission,volume");
         for d in &dynamic {
@@ -208,7 +208,7 @@ async fn handle_validators(
         validators.truncate(limit);
 
         if output == "json" {
-            println!("{}", serde_json::to_string_pretty(&validators)?);
+            print_json_ser(&validators);
         } else if output == "csv" {
             println!("uid,hotkey,coldkey,stake_rao,trust,vtrust,dividends,emission");
             for v in &validators {
@@ -237,7 +237,7 @@ async fn handle_validators(
         sorted.truncate(limit);
 
         if output == "json" {
-            println!("{}", serde_json::to_string_pretty(&sorted)?);
+            print_json_ser(&sorted);
         } else if output == "csv" {
             println!("hotkey,owner,take_pct,total_stake_rao,nominators,registrations");
             for d in &sorted {
@@ -288,7 +288,7 @@ async fn handle_history(address: &str, output: &str, limit: usize) -> Result<()>
     match extrinsics {
         Some(txs) if !txs.is_empty() => {
             if output == "json" {
-                println!("{}", serde_json::to_string_pretty(&txs)?);
+                print_json_ser(&txs);
             } else if output == "csv" {
                 println!("block,hash,module,call,success,timestamp");
                 for tx in txs {
@@ -697,7 +697,7 @@ async fn handle_swap_sim(client: &Client, netuid: u16, tao: Option<f64>, alpha: 
 async fn handle_nominations(client: &Client, hotkey: &str, output: &str) -> Result<()> {
     let delegates = client.get_delegated(hotkey).await?;
     if output == "json" {
-        println!("{}", serde_json::to_string_pretty(&delegates)?);
+        print_json_ser(&delegates);
         return Ok(());
     }
 

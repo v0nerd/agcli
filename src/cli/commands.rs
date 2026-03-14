@@ -15,10 +15,11 @@ pub async fn execute(cli: Cli) -> Result<()> {
     let password = cli.password.clone();
     let yes = cli.yes;
     let batch = cli.batch;
-    let _pretty = cli.pretty;
+    let pretty = cli.pretty;
 
-    // Set batch mode globally so helpers can check it
+    // Set global mode flags so helpers can check them
     set_batch_mode(batch || yes);
+    set_pretty_mode(pretty);
 
     match cli.command {
         Commands::Wallet(cmd) => wallet_cmds::handle_wallet(cmd, &cli.wallet_dir, &cli.wallet, password.as_deref()).await,
@@ -78,11 +79,7 @@ pub async fn execute(cli: Cli) -> Result<()> {
             }
             println!("Transferring {} to {}", balance.display_tao(), dest);
             let hash = client.transfer(wallet.coldkey()?, &dest, balance).await?;
-            if output == "json" {
-                println!("{}", serde_json::json!({"tx_hash": hash}));
-            } else {
-                println!("Transaction submitted: {}", hash);
-            }
+            print_tx_result(output, &hash, "Transaction submitted.");
             Ok(())
         }
         Commands::TransferAll { dest, keep_alive } => {
@@ -91,11 +88,7 @@ pub async fn execute(cli: Cli) -> Result<()> {
             unlock_coldkey(&mut wallet, password.as_deref())?;
             println!("Transferring all balance to {} (keep_alive={})", dest, keep_alive);
             let hash = client.transfer_all(wallet.coldkey()?, &dest, keep_alive).await?;
-            if output == "json" {
-                println!("{}", serde_json::json!({"tx_hash": hash}));
-            } else {
-                println!("All balance transferred. Tx: {}", hash);
-            }
+            print_tx_result(output, &hash, "All balance transferred.");
             Ok(())
         }
         Commands::Stake(cmd) => {
@@ -180,7 +173,7 @@ async fn handle_subnet(
         SubnetCommands::List => {
             let subnets = crate::queries::subnet::list_subnets(client).await?;
             if output == "json" {
-                println!("{}", serde_json::to_string_pretty(&subnets)?);
+                print_json_ser(&subnets);
             } else if output == "csv" {
                 println!("netuid,name,n,max_n,tempo,emission,burn_rao,owner");
                 for s in &subnets {
@@ -220,7 +213,7 @@ async fn handle_subnet(
                     let emission_rao = dynamic.as_ref().map(|d| d.total_emission()).unwrap_or(s.emission_value);
                     s.emission_value = emission_rao;
                     if output == "json" {
-                        println!("{}", serde_json::to_string_pretty(&s)?);
+                        print_json_ser(&s);
                     } else {
                         println!("Subnet {} ({})", s.netuid, s.name);
                         println!("  Symbol:        {}", s.symbol);
@@ -293,7 +286,7 @@ async fn handle_subnet(
                 match neuron {
                     Some(n) => {
                         if output == "json" {
-                            println!("{}", serde_json::to_string_pretty(&n)?);
+                            print_json_ser(&n);
                         } else {
                             println!("Neuron UID {} on SN{}", target_uid, netuid);
                             println!("  Hotkey:      {}", n.hotkey);
@@ -330,7 +323,7 @@ async fn handle_subnet(
             }
             let mg = crate::queries::fetch_metagraph(client, netuid.into()).await?;
             if output == "json" {
-                println!("{}", serde_json::to_string_pretty(&mg)?);
+                print_json_ser(&mg);
             } else if output == "csv" {
                 println!("uid,hotkey,coldkey,stake_rao,rank,trust,consensus,incentive,dividends,emission,validator_permit,last_update");
                 for n in &mg.neurons {
@@ -546,7 +539,7 @@ async fn handle_subnet_liquidity(client: &Client, output: &str, netuid: Option<u
                 "slippage_estimates": slippage_entries,
             }));
         }
-        println!("{}", serde_json::to_string_pretty(&results)?);
+        print_json_ser(&results);
         return Ok(());
     }
 
@@ -1275,7 +1268,7 @@ async fn handle_delegate(
         DelegateCommands::List => {
             let delegates = client.get_delegates().await?;
             if output == "json" {
-                println!("{}", serde_json::to_string_pretty(&delegates)?);
+                print_json_ser(&delegates);
             } else if output == "csv" {
                 println!("hotkey,owner,take_pct,total_stake_rao,nominators");
                 for d in &delegates {
@@ -1692,7 +1685,7 @@ async fn handle_proxy(
                 let json: Vec<serde_json::Value> = proxies.iter().map(|(d, t, delay)| {
                     serde_json::json!({"delegate": d, "proxy_type": t, "delay": delay})
                 }).collect();
-                println!("{}", serde_json::to_string_pretty(&json)?);
+                print_json_ser(&json);
             } else if proxies.is_empty() {
                 println!("No proxy accounts found for {}", crate::utils::short_ss58(&addr));
             } else {

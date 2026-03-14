@@ -66,6 +66,46 @@ pub fn check_spending_limit(netuid: u16, tao_amount: f64) -> Result<()> {
     Ok(())
 }
 
+/// Print a JSON value to stdout. Respects the global pretty-print flag.
+pub fn print_json(value: &serde_json::Value) {
+    if is_pretty_mode() {
+        println!("{}", serde_json::to_string_pretty(value).unwrap_or_default());
+    } else {
+        println!("{}", value);
+    }
+}
+
+/// Print a Serialize-able value as JSON. Respects global pretty-print flag.
+pub fn print_json_ser<T: serde::Serialize>(value: &T) {
+    if is_pretty_mode() {
+        println!("{}", serde_json::to_string_pretty(value).unwrap_or_default());
+    } else {
+        println!("{}", serde_json::to_string(value).unwrap_or_default());
+    }
+}
+
+/// Print transaction result in both json and table modes.
+pub fn print_tx_result(output: &str, hash: &str, label: &str) {
+    if output == "json" {
+        print_json(&serde_json::json!({"tx_hash": hash}));
+    } else {
+        println!("{} Tx: {}", label, hash);
+    }
+}
+
+/// Thread-local pretty mode flag.
+static PRETTY_MODE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Set pretty mode globally.
+pub fn set_pretty_mode(pretty: bool) {
+    PRETTY_MODE.store(pretty, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Check if pretty mode is active.
+pub fn is_pretty_mode() -> bool {
+    PRETTY_MODE.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 /// Thread-local batch mode flag (set by main before dispatch).
 static BATCH_MODE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 

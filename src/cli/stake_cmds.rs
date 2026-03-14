@@ -21,7 +21,7 @@ pub async fn handle_stake(
             let addr = resolve_coldkey_address(address, wallet_dir, wallet_name);
             let stakes = client.get_stake_for_coldkey(&addr).await?;
             if output == "json" {
-                println!("{}", serde_json::to_string_pretty(&stakes)?);
+                print_json_ser(&stakes);
             } else if output == "csv" {
                 println!("netuid,hotkey,stake_rao,alpha_raw");
                 for s in &stakes {
