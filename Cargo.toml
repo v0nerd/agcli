@@ -17,7 +17,6 @@ parity-scale-codec = { version = "3.7", features = ["derive"] }
 
 # Crypto
 bip39 = "2"
-schnorrkel = "0.11"
 blake2 = "0.10"
 sha2 = "0.10"
 aes-gcm = "0.10"
@@ -25,17 +24,12 @@ argon2 = "0.5"
 crypto_secretbox = "0.1"
 rand = "0.8"
 zeroize = { version = "1", features = ["derive"] }
-ss58-registry = "1"
-bs58 = "0.5"
 
 # CLI
 clap = { version = "4", features = ["derive", "env", "wrap_help"] }
 clap_complete = "4"
 comfy-table = "7"
-indicatif = "0.17"
-console = "0.15"
 dialoguer = "0.11"
-colored = "2"
 
 # Async
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-util", "net", "time", "sync", "signal"] }
@@ -59,7 +53,6 @@ thiserror = "2"
 anyhow = "1"
 chrono = "0.4"
 dirs = "6"
-num-format = "0.4"
 
 [build-dependencies]
 tokio = { version = "1", features = ["full"] }

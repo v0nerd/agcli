@@ -227,6 +227,46 @@ pub fn parse_children(children_str: &str) -> Result<Vec<(u64, String)>> {
     Ok(result)
 }
 
+/// Render a slice in json, csv, or table format.
+///
+/// - `json`: Serializes `data` with `print_json_ser`.
+/// - `csv`: Prints `csv_header` then calls `csv_row` per item.
+/// - `table`: Prints optional `preamble`, then builds a comfy_table
+///   with `table_headers` and `table_row` per item.
+pub fn render_rows<T: serde::Serialize>(
+    output: &str,
+    data: &[T],
+    csv_header: &str,
+    csv_row: impl Fn(&T) -> String,
+    table_headers: &[&str],
+    table_row: impl Fn(&T) -> Vec<String>,
+    preamble: Option<&str>,
+) {
+    if output == "json" {
+        print_json_ser(&data);
+    } else if output == "csv" {
+        println!("{}", csv_header);
+        for item in data {
+            println!("{}", csv_row(item));
+        }
+    } else {
+        if let Some(text) = preamble {
+            println!("{}", text);
+        }
+        let mut table = comfy_table::Table::new();
+        table.set_header(
+            table_headers
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<Vec<_>>(),
+        );
+        for item in data {
+            table.add_row(table_row(item));
+        }
+        println!("{table}");
+    }
+}
+
 /// Build a HashMap of netuid → &DynamicInfo for quick lookups.
 pub fn build_dynamic_map(
     dynamic: &[crate::types::chain_data::DynamicInfo],

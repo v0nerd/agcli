@@ -2,18 +2,32 @@
 //! Run with: cargo test --test chain_integration_test -- --nocapture
 //!
 //! These tests perform read-only queries against the Bittensor mainnet.
+//! Uses a shared client (single WebSocket) to avoid rate limiting on the Finney endpoint.
 
 use agcli::chain::Client;
 use agcli::types::NetUid;
+use std::sync::Arc;
+use tokio::sync::OnceCell;
 
 const FINNEY: &str = "wss://entrypoint-finney.opentensor.ai:443";
 
 /// Known Bittensor foundation/OTF address for testing.
 const KNOWN_ADDRESS: &str = "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY";
 
+/// Shared client across all tests in this file — single WebSocket connection.
+static CLIENT: OnceCell<Arc<Client>> = OnceCell::const_new();
+
+async fn client() -> &'static Arc<Client> {
+    CLIENT
+        .get_or_init(|| async {
+            Arc::new(Client::connect(FINNEY).await.expect("connect to finney"))
+        })
+        .await
+}
+
 #[tokio::test]
 async fn test_subnet_hyperparams() {
-    let client = Client::connect(FINNEY).await.expect("connect");
+    let client = client().await;
     let params = client
         .get_subnet_hyperparams(NetUid(1))
         .await
@@ -30,7 +44,7 @@ async fn test_subnet_hyperparams() {
 
 #[tokio::test]
 async fn test_get_subnet_info() {
-    let client = Client::connect(FINNEY).await.expect("connect");
+    let client = client().await;
     let info = client
         .get_subnet_info(NetUid(1))
         .await
@@ -47,7 +61,7 @@ async fn test_get_subnet_info() {
 
 #[tokio::test]
 async fn test_dynamic_info_all_vs_single() {
-    let client = Client::connect(FINNEY).await.expect("connect");
+    let client = client().await;
     let all = client.get_all_dynamic_info().await.expect("all dynamic");
     let single = client
         .get_dynamic_info(NetUid(1))
@@ -77,7 +91,7 @@ async fn test_dynamic_info_all_vs_single() {
 
 #[tokio::test]
 async fn test_get_balance_known_account() {
-    let client = Client::connect(FINNEY).await.expect("connect");
+    let client = client().await;
     let balance = client
         .get_balance_ss58(KNOWN_ADDRESS)
         .await
@@ -92,7 +106,7 @@ async fn test_get_balance_known_account() {
 
 #[tokio::test]
 async fn test_get_stake_for_unknown_coldkey() {
-    let client = Client::connect(FINNEY).await.expect("connect");
+    let client = client().await;
     // A freshly generated address should have no stakes
     let stakes = client
         .get_stake_for_coldkey("5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuyUpnhM")
@@ -104,7 +118,7 @@ async fn test_get_stake_for_unknown_coldkey() {
 
 #[tokio::test]
 async fn test_nonexistent_subnet() {
-    let client = Client::connect(FINNEY).await.expect("connect");
+    let client = client().await;
     // Very high netuid should not exist
     let info = client
         .get_subnet_info(NetUid(65535))
@@ -115,7 +129,7 @@ async fn test_nonexistent_subnet() {
 
 #[tokio::test]
 async fn test_get_total_issuance() {
-    let client = Client::connect(FINNEY).await.expect("connect");
+    let client = client().await;
     let total = client.get_total_stake().await.expect("total stake");
     assert!(total.rao() > 0, "total stake should be nonzero");
     println!("Total stake: {} TAO", total.tao());
@@ -123,7 +137,7 @@ async fn test_get_total_issuance() {
 
 #[tokio::test]
 async fn test_neurons_lite_ordering() {
-    let client = Client::connect(FINNEY).await.expect("connect");
+    let client = client().await;
     let neurons = client.get_neurons_lite(NetUid(1)).await.expect("neurons");
     assert!(!neurons.is_empty());
     // UIDs should be sequential starting from 0
@@ -141,7 +155,7 @@ async fn test_neurons_lite_ordering() {
 
 #[tokio::test]
 async fn test_total_issuance() {
-    let client = Client::connect(FINNEY).await.expect("connect");
+    let client = client().await;
     let issuance = client.get_total_issuance().await.expect("total issuance");
     // Bittensor total issuance should be > 0 and reasonable (millions of TAO)
     assert!(issuance.rao() > 0, "total issuance should be nonzero");
@@ -150,7 +164,7 @@ async fn test_total_issuance() {
 
 #[tokio::test]
 async fn test_block_emission() {
-    let client = Client::connect(FINNEY).await.expect("connect");
+    let client = client().await;
     let emission = client.get_block_emission().await.expect("block emission");
     // Block emission should be positive (TAO minted per block)
     assert!(emission.rao() > 0, "block emission should be positive");
@@ -163,7 +177,7 @@ async fn test_block_emission() {
 
 #[tokio::test]
 async fn test_sim_swap_tao_for_alpha() {
-    let client = Client::connect(FINNEY).await.expect("connect");
+    let client = client().await;
     // Simulate swapping 1 TAO for alpha on SN1
     let one_tao_rao = 1_000_000_000u64;
     let (alpha_amount, tao_fee, alpha_fee) = client
@@ -179,7 +193,7 @@ async fn test_sim_swap_tao_for_alpha() {
 
 #[tokio::test]
 async fn test_sim_swap_alpha_for_tao() {
-    let client = Client::connect(FINNEY).await.expect("connect");
+    let client = client().await;
     // Simulate swapping 100 alpha units for TAO on SN1
     let alpha = 100_000_000_000u64; // 100 alpha
     let (tao_amount, tao_fee, alpha_fee) = client
@@ -195,7 +209,7 @@ async fn test_sim_swap_alpha_for_tao() {
 
 #[tokio::test]
 async fn test_get_delegate_single() {
-    let client = Client::connect(FINNEY).await.expect("connect");
+    let client = client().await;
     // Get all delegates, then query the first one by hotkey
     let delegates = client.get_delegates().await.expect("delegates");
     assert!(!delegates.is_empty());
@@ -216,7 +230,7 @@ async fn test_get_delegate_single() {
 
 #[tokio::test]
 async fn test_list_proxies_empty() {
-    let client = Client::connect(FINNEY).await.expect("connect");
+    let client = client().await;
     // An unused address should have no proxies
     let proxies = client
         .list_proxies("5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuyUpnhM")
@@ -228,7 +242,7 @@ async fn test_list_proxies_empty() {
 
 #[tokio::test]
 async fn test_dynamic_info_all_valid_prices() {
-    let client = Client::connect(FINNEY).await.expect("connect");
+    let client = client().await;
     let dynamic = client.get_all_dynamic_info().await.expect("dynamic");
     // Check no negative prices (regression test from Step 25)
     for d in &dynamic {
@@ -244,7 +258,7 @@ async fn test_dynamic_info_all_valid_prices() {
 
 #[tokio::test]
 async fn test_hyperparams_nonexistent_subnet() {
-    let client = Client::connect(FINNEY).await.expect("connect");
+    let client = client().await;
     let params = client
         .get_subnet_hyperparams(NetUid(65535))
         .await
@@ -257,7 +271,7 @@ async fn test_hyperparams_nonexistent_subnet() {
 /// Test coldkey swap scheduled query — most accounts have no swap scheduled.
 #[tokio::test]
 async fn test_coldkey_swap_scheduled_none() {
-    let client = Client::connect(FINNEY).await.expect("connect");
+    let client = client().await;
     let swap = client
         .get_coldkey_swap_scheduled(KNOWN_ADDRESS)
         .await
@@ -272,7 +286,7 @@ async fn test_coldkey_swap_scheduled_none() {
 /// Test child keys query on SN1 for the top delegate.
 #[tokio::test]
 async fn test_child_keys_query() {
-    let client = Client::connect(FINNEY).await.expect("connect");
+    let client = client().await;
     // Query child keys for a well-known validator on SN1
     // This should return either empty or a valid list
     let children = client
@@ -298,7 +312,7 @@ async fn test_child_keys_query() {
 /// Test parent keys query.
 #[tokio::test]
 async fn test_parent_keys_query() {
-    let client = Client::connect(FINNEY).await.expect("connect");
+    let client = client().await;
     let parents = client
         .get_parent_keys(KNOWN_ADDRESS, NetUid(1))
         .await
@@ -321,7 +335,7 @@ async fn test_parent_keys_query() {
 /// Test historical stake query (recent block should work).
 #[tokio::test]
 async fn test_stake_at_recent_block() {
-    let client = Client::connect(FINNEY).await.expect("connect");
+    let client = client().await;
     let current_block = client.get_block_number().await.expect("block number");
     // Try a block a few back (within pruning window)
     let recent = (current_block - 10) as u32;
@@ -342,7 +356,7 @@ async fn test_stake_at_recent_block() {
 /// Test historical balance + stake at same block are consistent.
 #[tokio::test]
 async fn test_historical_account_consistency() {
-    let client = Client::connect(FINNEY).await.expect("connect");
+    let client = client().await;
     let current_block = client.get_block_number().await.expect("block number");
     let recent = (current_block - 5) as u32;
     let hash = client.get_block_hash(recent).await.expect("block hash");
@@ -363,7 +377,7 @@ async fn test_historical_account_consistency() {
 /// Test identity at recent block.
 #[tokio::test]
 async fn test_identity_at_block() {
-    let client = Client::connect(FINNEY).await.expect("connect");
+    let client = client().await;
     let current_block = client.get_block_number().await.expect("block number");
     let recent = (current_block - 5) as u32;
     let hash = client.get_block_hash(recent).await.expect("block hash");
@@ -382,7 +396,7 @@ async fn test_identity_at_block() {
 /// Test pending child keys query — should return None for most addresses (no pending changes).
 #[tokio::test]
 async fn test_pending_child_keys_query() {
-    let client = Client::connect(FINNEY).await.expect("connect");
+    let client = client().await;
     let result = client
         .get_pending_child_keys(KNOWN_ADDRESS, NetUid(1))
         .await
@@ -410,7 +424,7 @@ async fn test_pending_child_keys_query() {
 /// Test pending child keys on a different subnet — should also work.
 #[tokio::test]
 async fn test_pending_child_keys_query_sn0() {
-    let client = Client::connect(FINNEY).await.expect("connect");
+    let client = client().await;
     let result = client
         .get_pending_child_keys(KNOWN_ADDRESS, NetUid(0))
         .await

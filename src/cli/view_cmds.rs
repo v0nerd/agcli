@@ -179,12 +179,12 @@ async fn handle_network(client: &Client, output: &str, at_block: Option<u32>) ->
 
 async fn handle_dynamic(client: &Client, output: &str) -> Result<()> {
     let dynamic = client.get_all_dynamic_info().await?;
-    if output == "json" {
-        print_json_ser(&dynamic);
-    } else if output == "csv" {
-        println!("netuid,name,symbol,tempo,price,tao_in_rao,alpha_in,alpha_out,emission,volume");
-        for d in &dynamic {
-            println!(
+    render_rows(
+        output,
+        &dynamic,
+        "netuid,name,symbol,tempo,price,tao_in_rao,alpha_in,alpha_out,emission,volume",
+        |d| {
+            format!(
                 "{},{},{},{},{:.6},{},{},{},{},{}",
                 d.netuid,
                 d.name,
@@ -196,12 +196,9 @@ async fn handle_dynamic(client: &Client, output: &str) -> Result<()> {
                 d.alpha_out.raw(),
                 d.total_emission(),
                 d.subnet_volume
-            );
-        }
-    } else {
-        println!("Dynamic TAO — {} subnets", dynamic.len());
-        let mut table = comfy_table::Table::new();
-        table.set_header(vec![
+            )
+        },
+        &[
             "NetUID",
             "Name",
             "Symbol",
@@ -211,9 +208,9 @@ async fn handle_dynamic(client: &Client, output: &str) -> Result<()> {
             "Alpha Out",
             "Emission",
             "Tempo",
-        ]);
-        for d in &dynamic {
-            table.add_row(vec![
+        ],
+        |d| {
+            vec![
                 format!("{}", d.netuid),
                 d.name.clone(),
                 d.symbol.clone(),
@@ -223,10 +220,10 @@ async fn handle_dynamic(client: &Client, output: &str) -> Result<()> {
                 format!("{}", d.alpha_out),
                 format!("{:.4} τ", d.total_emission() as f64 / 1e9),
                 format!("{}", d.tempo),
-            ]);
-        }
-        println!("{table}");
-    }
+            ]
+        },
+        Some(&format!("Dynamic TAO — {} subnets", dynamic.len())),
+    );
     Ok(())
 }
 

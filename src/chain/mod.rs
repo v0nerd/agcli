@@ -125,6 +125,24 @@ impl Client {
         hash.ok_or_else(|| anyhow::anyhow!("Block {} not found", block_number))
     }
 
+    /// Wrap at-block storage errors with an archive node hint when state is pruned.
+    fn annotate_at_block_error(err: anyhow::Error, block_number: Option<u32>) -> anyhow::Error {
+        let msg = format!("{:#}", err);
+        let is_state_pruned = msg.contains("pruned")
+            || msg.contains("State already discarded")
+            || msg.contains("UnknownBlock")
+            || msg.contains("not found");
+        if is_state_pruned {
+            if let Some(bn) = block_number {
+                return anyhow::anyhow!(
+                    "{}\n\n  Hint: Block {} state may have been pruned from this node.\n  Use --endpoint with an archive node to query historical state.\n  Example: agcli balance --at-block {} --endpoint wss://archive-node-url:443",
+                    msg, bn, bn
+                );
+            }
+        }
+        err
+    }
+
     /// Get TAO balance at a specific block hash.
     pub async fn get_balance_at_block(
         &self,
@@ -134,7 +152,13 @@ impl Client {
         let pk = crate::wallet::keypair::from_ss58(ss58)?;
         let account_id = Self::to_account_id(&pk);
         let addr = api::storage().system().account(&account_id);
-        let info = self.inner.storage().at(block_hash).fetch(&addr).await?;
+        let info = self
+            .inner
+            .storage()
+            .at(block_hash)
+            .fetch(&addr)
+            .await
+            .map_err(|e| Self::annotate_at_block_error(e.into(), None))?;
         match info {
             Some(info) => Ok(Balance::from_rao(info.data.free)),
             None => Ok(Balance::ZERO),
@@ -147,7 +171,13 @@ impl Client {
         block_hash: subxt::utils::H256,
     ) -> Result<Balance> {
         let addr = api::storage().subtensor_module().total_stake();
-        let val = self.inner.storage().at(block_hash).fetch(&addr).await?;
+        let val = self
+            .inner
+            .storage()
+            .at(block_hash)
+            .fetch(&addr)
+            .await
+            .map_err(|e| Self::annotate_at_block_error(e.into(), None))?;
         Ok(Balance::from_rao(val.unwrap_or(0)))
     }
 
@@ -1317,7 +1347,8 @@ impl Client {
             .runtime_api()
             .at(block_hash)
             .call(payload)
-            .await?;
+            .await
+            .map_err(|e| Self::annotate_at_block_error(e.into(), None))?;
         Ok(result.into_iter().map(StakeInfo::from).collect())
     }
 
@@ -1329,7 +1360,13 @@ impl Client {
     ) -> Result<Option<ChainIdentity>> {
         let account_id = Self::ss58_to_account_id(ss58)?;
         let addr = api::storage().registry().identity_of(&account_id);
-        let result = self.inner.storage().at(block_hash).fetch(&addr).await?;
+        let result = self
+            .inner
+            .storage()
+            .at(block_hash)
+            .fetch(&addr)
+            .await
+            .map_err(|e| Self::annotate_at_block_error(e.into(), None))?;
         Ok(result.map(|reg| {
             let info = reg.info;
             ChainIdentity {

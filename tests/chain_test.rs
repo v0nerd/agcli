@@ -1,14 +1,29 @@
 //! Integration test: connect to finney and query real chain data.
 //! Run with: cargo test --test chain_test -- --nocapture
+//!
+//! Uses a shared client (single WebSocket) to avoid rate limiting on the Finney endpoint.
 
 use agcli::chain::Client;
 use agcli::types::NetUid;
+use std::sync::Arc;
+use tokio::sync::OnceCell;
 
 const FINNEY: &str = "wss://entrypoint-finney.opentensor.ai:443";
 
+/// Shared client across all tests in this file — single WebSocket connection.
+static CLIENT: OnceCell<Arc<Client>> = OnceCell::const_new();
+
+async fn client() -> &'static Arc<Client> {
+    CLIENT
+        .get_or_init(|| async {
+            Arc::new(Client::connect(FINNEY).await.expect("connect to finney"))
+        })
+        .await
+}
+
 #[tokio::test]
 async fn test_connect_and_block_number() {
-    let client = Client::connect(FINNEY).await.expect("connect");
+    let client = client().await;
     let block = client.get_block_number().await.expect("block number");
     assert!(
         block > 1_000_000,
@@ -19,7 +34,7 @@ async fn test_connect_and_block_number() {
 
 #[tokio::test]
 async fn test_total_stake() {
-    let client = Client::connect(FINNEY).await.expect("connect");
+    let client = client().await;
     let stake = client.get_total_stake().await.expect("total stake");
     println!("Total stake: {stake}");
     assert!(stake.rao() > 0, "total stake should be nonzero");
@@ -27,7 +42,7 @@ async fn test_total_stake() {
 
 #[tokio::test]
 async fn test_total_networks() {
-    let client = Client::connect(FINNEY).await.expect("connect");
+    let client = client().await;
     let n = client.get_total_networks().await.expect("total networks");
     println!("Total networks: {n}");
     assert!(n > 50, "finney should have >50 subnets, got {n}");
@@ -35,7 +50,7 @@ async fn test_total_networks() {
 
 #[tokio::test]
 async fn test_get_balance() {
-    let client = Client::connect(FINNEY).await.expect("connect");
+    let client = client().await;
     // Query a known address (opentensor foundation)
     let balance = client
         .get_balance_ss58("5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY")
@@ -46,7 +61,7 @@ async fn test_get_balance() {
 
 #[tokio::test]
 async fn test_get_all_subnets() {
-    let client = Client::connect(FINNEY).await.expect("connect");
+    let client = client().await;
     let subnets = client.get_all_subnets().await.expect("subnets");
     println!("Got {} subnets", subnets.len());
     assert!(!subnets.is_empty(), "should have subnets");
@@ -63,7 +78,7 @@ async fn test_get_all_subnets() {
 
 #[tokio::test]
 async fn test_get_neurons_lite() {
-    let client = Client::connect(FINNEY).await.expect("connect");
+    let client = client().await;
     let neurons = client.get_neurons_lite(NetUid(1)).await.expect("neurons");
     println!("SN1 neurons: {}", neurons.len());
     assert!(!neurons.is_empty(), "SN1 should have neurons");
@@ -79,7 +94,7 @@ async fn test_get_neurons_lite() {
 
 #[tokio::test]
 async fn test_get_delegates() {
-    let client = Client::connect(FINNEY).await.expect("connect");
+    let client = client().await;
     let delegates = client.get_delegates().await.expect("delegates");
     println!("Got {} delegates", delegates.len());
     assert!(!delegates.is_empty(), "should have delegates");
@@ -87,7 +102,7 @@ async fn test_get_delegates() {
 
 #[tokio::test]
 async fn test_get_stake_for_coldkey() {
-    let client = Client::connect(FINNEY).await.expect("connect");
+    let client = client().await;
     let stakes = client
         .get_stake_for_coldkey("5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY")
         .await
@@ -97,7 +112,7 @@ async fn test_get_stake_for_coldkey() {
 
 #[tokio::test]
 async fn test_get_all_dynamic_info() {
-    let client = Client::connect(FINNEY).await.expect("connect");
+    let client = client().await;
     let dynamic = client.get_all_dynamic_info().await.expect("dynamic info");
     println!("Got {} dynamic subnet infos", dynamic.len());
     assert!(!dynamic.is_empty(), "should have dynamic info");
@@ -111,7 +126,7 @@ async fn test_get_all_dynamic_info() {
 
 #[tokio::test]
 async fn test_get_dynamic_info_single() {
-    let client = Client::connect(FINNEY).await.expect("connect");
+    let client = client().await;
     let dynamic = client
         .get_dynamic_info(NetUid(1))
         .await
