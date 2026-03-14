@@ -17,19 +17,8 @@ pub async fn handle_wallet(
             name,
             password: cmd_password,
         } => {
-            let password = cmd_password
-                .or_else(|| global_password.map(|s| s.to_string()))
-                .map(Ok)
-                .unwrap_or_else(|| {
-                    if crate::cli::helpers::is_batch_mode() {
-                        return Err(anyhow::anyhow!("Password required in batch mode. Pass --password <pw> or set AGCLI_PASSWORD."));
-                    }
-                    dialoguer::Password::new()
-                        .with_prompt("Set coldkey password")
-                        .with_confirmation("Confirm password", "Passwords don't match")
-                        .interact()
-                        .map_err(anyhow::Error::from)
-                })?;
+            let password =
+                crate::cli::helpers::require_password(cmd_password, global_password, true)?;
             let wallet = Wallet::create(wallet_dir, &name, &password, "default")?;
             if output == "json" {
                 crate::cli::helpers::print_json(&serde_json::json!({
@@ -50,30 +39,34 @@ pub async fn handle_wallet(
         }
         WalletCommands::List => {
             let wallets = Wallet::list_wallets(wallet_dir)?;
+            // Collect name+address pairs once
+            let entries: Vec<(String, String)> = wallets
+                .iter()
+                .map(|name| {
+                    let addr = Wallet::open(format!("{}/{}", wallet_dir, name))
+                        .ok()
+                        .and_then(|w| w.coldkey_ss58().map(|s| s.to_string()))
+                        .unwrap_or_default();
+                    (name.clone(), addr)
+                })
+                .collect();
             if output == "json" {
-                let items: Vec<serde_json::Value> = wallets
+                let items: Vec<serde_json::Value> = entries
                     .iter()
-                    .map(|name| {
-                        let w = Wallet::open(format!("{}/{}", wallet_dir, name)).ok();
-                        let addr = w
-                            .as_ref()
-                            .and_then(|w| w.coldkey_ss58().map(|s| s.to_string()))
-                            .unwrap_or_default();
-                        serde_json::json!({"name": name, "coldkey": addr})
-                    })
+                    .map(|(n, a)| serde_json::json!({"name": n, "coldkey": a}))
                     .collect();
                 crate::cli::helpers::print_json(&serde_json::json!(items));
-            } else if wallets.is_empty() {
+            } else if output == "csv" {
+                println!("name,coldkey");
+                for (name, addr) in &entries {
+                    println!("{},{}", name, addr);
+                }
+            } else if entries.is_empty() {
                 println!("No wallets found in {}", wallet_dir);
             } else {
                 println!("Wallets in {}:", wallet_dir);
-                for name in wallets {
-                    let w = Wallet::open(format!("{}/{}", wallet_dir, name)).ok();
-                    let addr = w
-                        .as_ref()
-                        .and_then(|w| w.coldkey_ss58().map(|s| s.to_string()))
-                        .unwrap_or_else(|| "?".to_string());
-                    println!("  {} ({})", name, crate::utils::short_ss58(&addr));
+                for (name, addr) in &entries {
+                    println!("  {} ({})", name, crate::utils::short_ss58(addr));
                 }
             }
             Ok(())
@@ -90,58 +83,77 @@ pub async fn handle_wallet(
             } else {
                 all_wallets
             };
-            if output == "json" {
-                let mut items: Vec<serde_json::Value> = Vec::new();
-                for name in &wallets {
-                    let w = Wallet::open(format!("{}/{}", wallet_dir, name));
-                    if let Ok(w) = w {
-                        let coldkey = w.coldkey_ss58().map(|s| s.to_string()).unwrap_or_default();
-                        let mut hotkeys_arr: Vec<serde_json::Value> = Vec::new();
-                        if all {
-                            if let Ok(hk_names) = w.list_hotkeys() {
-                                for hk_name in &hk_names {
-                                    let mut w2 =
-                                        Wallet::open(format!("{}/{}", wallet_dir, name)).unwrap();
-                                    if w2.load_hotkey(hk_name).is_ok() {
-                                        if let Some(hk_addr) = w2.hotkey_ss58() {
-                                            hotkeys_arr.push(serde_json::json!({
-                                                "name": hk_name,
-                                                "address": hk_addr.to_string(),
-                                            }));
-                                        }
+            // Collect wallet data once, then format for the chosen output
+            struct WalletEntry {
+                name: String,
+                coldkey: String,
+                hotkeys: Vec<(String, String)>, // (name, address)
+            }
+            let mut entries: Vec<WalletEntry> = Vec::new();
+            for name in &wallets {
+                if let Ok(w) = Wallet::open(format!("{}/{}", wallet_dir, name)) {
+                    let coldkey = w.coldkey_ss58().map(|s| s.to_string()).unwrap_or_default();
+                    let mut hotkeys = Vec::new();
+                    if all {
+                        if let Ok(hk_names) = w.list_hotkeys() {
+                            for hk_name in &hk_names {
+                                let mut w2 =
+                                    Wallet::open(format!("{}/{}", wallet_dir, name)).unwrap();
+                                if w2.load_hotkey(hk_name).is_ok() {
+                                    if let Some(hk_addr) = w2.hotkey_ss58() {
+                                        hotkeys.push((hk_name.clone(), hk_addr.to_string()));
                                     }
                                 }
                             }
                         }
-                        let mut obj = serde_json::json!({"name": name, "coldkey": coldkey});
+                    }
+                    entries.push(WalletEntry {
+                        name: name.clone(),
+                        coldkey,
+                        hotkeys,
+                    });
+                }
+            }
+            if output == "json" {
+                let items: Vec<serde_json::Value> = entries
+                    .iter()
+                    .map(|e| {
+                        let mut obj = serde_json::json!({"name": e.name, "coldkey": e.coldkey});
                         if all {
-                            obj["hotkeys"] = serde_json::json!(hotkeys_arr);
+                            obj["hotkeys"] = serde_json::json!(e
+                                .hotkeys
+                                .iter()
+                                .map(|(n, a)| serde_json::json!({"name": n, "address": a}))
+                                .collect::<Vec<_>>());
                         }
-                        items.push(obj);
+                        obj
+                    })
+                    .collect();
+                crate::cli::helpers::print_json(&serde_json::json!(items));
+            } else if output == "csv" {
+                if all {
+                    println!("wallet,coldkey,hotkey_name,hotkey_address");
+                    for e in &entries {
+                        if e.hotkeys.is_empty() {
+                            println!("{},{},,", e.name, e.coldkey);
+                        } else {
+                            for (hk_name, hk_addr) in &e.hotkeys {
+                                println!("{},{},{},{}", e.name, e.coldkey, hk_name, hk_addr);
+                            }
+                        }
+                    }
+                } else {
+                    println!("name,coldkey");
+                    for e in &entries {
+                        println!("{},{}", e.name, e.coldkey);
                     }
                 }
-                crate::cli::helpers::print_json(&serde_json::json!(items));
             } else {
-                for name in &wallets {
-                    let w = Wallet::open(format!("{}/{}", wallet_dir, name));
-                    if let Ok(w) = w {
-                        println!("Wallet: {}", name);
-                        if let Some(addr) = w.coldkey_ss58() {
-                            println!("  Coldkey: {}", addr);
-                        }
-                        if all {
-                            if let Ok(hotkeys) = w.list_hotkeys() {
-                                for hk_name in &hotkeys {
-                                    let mut w2 =
-                                        Wallet::open(format!("{}/{}", wallet_dir, name)).unwrap();
-                                    if w2.load_hotkey(hk_name).is_ok() {
-                                        if let Some(hk_addr) = w2.hotkey_ss58() {
-                                            println!("  Hotkey '{}': {}", hk_name, hk_addr);
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                for e in &entries {
+                    println!("Wallet: {}", e.name);
+                    println!("  Coldkey: {}", e.coldkey);
+                    for (hk_name, hk_addr) in &e.hotkeys {
+                        println!("  Hotkey '{}': {}", hk_name, hk_addr);
                     }
                 }
             }
@@ -152,30 +164,9 @@ pub async fn handle_wallet(
             mnemonic: cmd_mnemonic,
             password: cmd_password,
         } => {
-            let mnemonic = match cmd_mnemonic {
-                Some(m) => m,
-                None => {
-                    if crate::cli::helpers::is_batch_mode() {
-                        anyhow::bail!("Mnemonic required in batch mode. Pass --mnemonic <phrase>.");
-                    }
-                    dialoguer::Input::<String>::new()
-                        .with_prompt("Enter mnemonic phrase")
-                        .interact_text()?
-                }
-            };
-            let password = cmd_password
-                .or_else(|| global_password.map(|s| s.to_string()))
-                .map(Ok)
-                .unwrap_or_else(|| {
-                    if crate::cli::helpers::is_batch_mode() {
-                        return Err(anyhow::anyhow!("Password required in batch mode. Pass --password <pw> or set AGCLI_PASSWORD."));
-                    }
-                    dialoguer::Password::new()
-                        .with_prompt("Set password")
-                        .with_confirmation("Confirm", "Mismatch")
-                        .interact()
-                        .map_err(anyhow::Error::from)
-                })?;
+            let mnemonic = crate::cli::helpers::require_mnemonic(cmd_mnemonic)?;
+            let password =
+                crate::cli::helpers::require_password(cmd_password, global_password, true)?;
             let wallet = Wallet::import_from_mnemonic(wallet_dir, &name, &mnemonic, &password)?;
             if output == "json" {
                 crate::cli::helpers::print_json(&serde_json::json!({
@@ -195,30 +186,9 @@ pub async fn handle_wallet(
             password: cmd_password,
         } => {
             println!("Regenerating coldkey from mnemonic...");
-            let mnemonic = match cmd_mnemonic {
-                Some(m) => m,
-                None => {
-                    if crate::cli::helpers::is_batch_mode() {
-                        anyhow::bail!("Mnemonic required in batch mode. Pass --mnemonic <phrase>.");
-                    }
-                    dialoguer::Input::<String>::new()
-                        .with_prompt("Enter mnemonic phrase")
-                        .interact_text()?
-                }
-            };
-            let password = cmd_password
-                .or_else(|| global_password.map(|s| s.to_string()))
-                .map(Ok)
-                .unwrap_or_else(|| {
-                    if crate::cli::helpers::is_batch_mode() {
-                        return Err(anyhow::anyhow!("Password required in batch mode. Pass --password <pw> or set AGCLI_PASSWORD."));
-                    }
-                    dialoguer::Password::new()
-                        .with_prompt("Set password")
-                        .with_confirmation("Confirm", "Mismatch")
-                        .interact()
-                        .map_err(anyhow::Error::from)
-                })?;
+            let mnemonic = crate::cli::helpers::require_mnemonic(cmd_mnemonic)?;
+            let password =
+                crate::cli::helpers::require_password(cmd_password, global_password, true)?;
             let wallet = Wallet::import_from_mnemonic(wallet_dir, "default", &mnemonic, &password)?;
             if output == "json" {
                 crate::cli::helpers::print_json(&serde_json::json!({
@@ -237,17 +207,7 @@ pub async fn handle_wallet(
             mnemonic: cmd_mnemonic,
         } => {
             println!("Regenerating hotkey '{}' from mnemonic...", name);
-            let mnemonic = match cmd_mnemonic {
-                Some(m) => m,
-                None => {
-                    if crate::cli::helpers::is_batch_mode() {
-                        anyhow::bail!("Mnemonic required in batch mode. Pass --mnemonic <phrase>.");
-                    }
-                    dialoguer::Input::<String>::new()
-                        .with_prompt("Enter hotkey mnemonic phrase")
-                        .interact_text()?
-                }
-            };
+            let mnemonic = crate::cli::helpers::require_mnemonic(cmd_mnemonic)?;
             let pair = crate::wallet::keypair::pair_from_mnemonic(&mnemonic)?;
             let ss58 = crate::wallet::keypair::to_ss58(&pair.public(), 42);
             let hotkey_path = std::path::PathBuf::from(wallet_dir)

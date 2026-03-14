@@ -227,6 +227,60 @@ pub fn parse_children(children_str: &str) -> Result<Vec<(u64, String)>> {
     Ok(result)
 }
 
+/// Build a HashMap of netuid → &DynamicInfo for quick lookups.
+pub fn build_dynamic_map(
+    dynamic: &[crate::types::chain_data::DynamicInfo],
+) -> std::collections::HashMap<u16, &crate::types::chain_data::DynamicInfo> {
+    dynamic.iter().map(|d| (d.netuid.0, d)).collect()
+}
+
+/// Require a mnemonic phrase: use `provided` if Some, else prompt interactively (or error in batch mode).
+pub fn require_mnemonic(provided: Option<String>) -> Result<String> {
+    match provided {
+        Some(m) => Ok(m),
+        None => {
+            if is_batch_mode() {
+                anyhow::bail!("Mnemonic required in batch mode. Pass --mnemonic <phrase>.");
+            }
+            dialoguer::Input::<String>::new()
+                .with_prompt("Enter mnemonic phrase")
+                .interact_text()
+                .map_err(anyhow::Error::from)
+        }
+    }
+}
+
+/// Require a password: use `cmd_password` (command-level), `global_password` (global flag), or prompt.
+/// If `confirm` is true, ask for password confirmation on interactive entry.
+pub fn require_password(
+    cmd_password: Option<String>,
+    global_password: Option<&str>,
+    confirm: bool,
+) -> Result<String> {
+    cmd_password
+        .or_else(|| global_password.map(|s| s.to_string()))
+        .map(Ok)
+        .unwrap_or_else(|| {
+            if is_batch_mode() {
+                return Err(anyhow::anyhow!(
+                    "Password required in batch mode. Pass --password <pw> or set AGCLI_PASSWORD."
+                ));
+            }
+            if confirm {
+                dialoguer::Password::new()
+                    .with_prompt("Set password")
+                    .with_confirmation("Confirm", "Mismatch")
+                    .interact()
+                    .map_err(anyhow::Error::from)
+            } else {
+                dialoguer::Password::new()
+                    .with_prompt("Password")
+                    .interact()
+                    .map_err(anyhow::Error::from)
+            }
+        })
+}
+
 /// Convert a serde_json::Value to a subxt dynamic Value for multisig call args.
 pub fn json_to_subxt_value(v: &serde_json::Value) -> subxt::dynamic::Value {
     use subxt::dynamic::Value;

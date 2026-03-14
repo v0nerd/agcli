@@ -436,8 +436,7 @@ async fn handle_account_explorer(client: &Client, address: &str, output: &str) -
     )?;
 
     let dynamic = client.get_all_dynamic_info().await.unwrap_or_default();
-    let dynamic_map: std::collections::HashMap<u16, &crate::types::chain_data::DynamicInfo> =
-        dynamic.iter().map(|d| (d.netuid.0, d)).collect();
+    let dynamic_map = build_dynamic_map(&dynamic);
     let delegate = client.get_delegate(address).await.ok().flatten();
 
     if output == "json" {
@@ -724,8 +723,7 @@ async fn handle_subnet_analytics(client: &Client, netuid: u16, output: &str) -> 
 async fn handle_staking_analytics(client: &Client, address: &str, output: &str) -> Result<()> {
     let stakes = client.get_stake_for_coldkey(address).await?;
     let dynamic = client.get_all_dynamic_info().await.unwrap_or_default();
-    let dynamic_map: std::collections::HashMap<u16, &crate::types::chain_data::DynamicInfo> =
-        dynamic.iter().map(|d| (d.netuid.0, d)).collect();
+    let dynamic_map = build_dynamic_map(&dynamic);
     let block_emission = client.get_block_emission().await?;
 
     struct PositionAnalytics {

@@ -61,26 +61,27 @@ agcli balance --address 5Gx...
 # Check balance as JSON
 agcli --output json balance --address 5Gx...
 
-# Create a wallet
-agcli wallet create --name my_wallet
+# Create a wallet (non-interactive)
+agcli wallet create --name my_wallet --password mypass
 
 # List all subnets (with real names from SubnetIdentitiesV3)
 agcli subnet list
 
 # View metagraph as JSON
-agcli --output json subnet metagraph 1
+agcli --output json subnet metagraph --netuid 1
 
-# Add stake
-agcli stake add 10.0 --netuid 1 --hotkey 5Hx...
+# Add stake (with slippage protection)
+agcli stake add --amount 10.0 --netuid 1 --hotkey 5Hx... --max-slippage 2.0
 
 # Transfer TAO
-agcli transfer 5Dest... 1.5
+agcli transfer --dest 5Dest... --amount 1.5
 
-# Set weights
-agcli weights set --netuid 1 "0:100,1:200,2:300"
+# Set weights (dry-run first, then submit)
+agcli weights set --netuid 1 --weights "0:100,1:200,2:300" --dry-run
+agcli weights set --netuid 1 --weights "0:100,1:200,2:300"
 
-# Commit-reveal weights
-agcli weights commit --netuid 1 "0:100,1:200"
+# Commit-reveal weights (auto waits + reveals)
+agcli weights commit-reveal --netuid 1 --weights "0:100,1:200" --wait
 
 # View portfolio (with real prices and subnet names)
 agcli view portfolio
@@ -95,7 +96,7 @@ agcli --output csv view dynamic
 agcli --live view dynamic
 
 # Live metagraph — track neuron changes on SN1 every 30s
-agcli --live 30 subnet metagraph 1
+agcli --live 30 subnet metagraph --netuid 1
 
 # Live portfolio — watch your portfolio in real-time
 agcli --live view portfolio
@@ -107,33 +108,38 @@ agcli subscribe blocks
 agcli --output json subscribe events
 
 # Subscribe to staking events only
-agcli subscribe events staking
+agcli subscribe events --filter staking
+
+# Filter events by subnet and account
+agcli subscribe events --filter all --netuid 1 --account 5Gx...
 
 # View network info as JSON
 agcli --output json view network
 
 # POW registration (multi-threaded)
-agcli subnet pow 1 --threads 8
+agcli subnet pow --netuid 1 --threads 8
 
 # Set subnet identity
-agcli identity set-subnet 1 --name "My Subnet" --github "user/repo"
+agcli identity set-subnet --netuid 1 --name "My Subnet" --github "user/repo"
 
 # Query on-chain identity
-agcli identity show 5GrwvaEF5zXb...
+agcli identity show --address 5GrwvaEF5zXb...
 
 # Interactive staking wizard
 agcli stake wizard
+# Non-interactive wizard
+agcli stake wizard --netuid 1 --amount 0.5 --password mypass --yes
 
 # Configuration (persistent to ~/.agcli/config.toml)
-agcli config set network finney
-agcli config set wallet my_wallet
-agcli config set output json
+agcli config set --key network --value finney
+agcli config set --key wallet --value my_wallet
+agcli config set --key output --value json
 agcli config show
-agcli config unset output
+agcli config unset --key output
 agcli config path
 
 # Proxy — execute through a proxy account
-agcli --proxy 5ProxyAccount... stake add 10 --netuid 1
+agcli --proxy 5ProxyAccount... stake add --amount 10 --netuid 1
 
 # View top validators (global)
 agcli view validators --limit 20
@@ -145,7 +151,7 @@ agcli view validators --netuid 1
 agcli view history --address 5Gx... --limit 10
 
 # Multisig — derive address
-agcli multisig address "5Addr1...,5Addr2...,5Addr3..." --threshold 2
+agcli multisig address --signatories "5Addr1...,5Addr2...,5Addr3..." --threshold 2
 
 # Multisig — submit a call
 agcli multisig submit --others "5Addr2...,5Addr3..." --threshold 2 \
@@ -159,28 +165,28 @@ agcli multisig approve --others "5Addr2...,5Addr3..." --threshold 2 \
 agcli view account --address 5Gx...
 
 # Subnet analytics (miners, validators, economics, top performers)
-agcli view subnet-analytics 1
+agcli view subnet-analytics --netuid 1
 
 # Staking analytics (APY estimates, emission projections)
 agcli view staking-analytics --address 5Gx...
 
 # Transfer entire balance (minus fees)
-agcli transfer-all 5Dest... --keep-alive
+agcli transfer-all --dest 5Dest... --keep-alive
 
 # Serve axon endpoint (miners)
 agcli serve axon --netuid 1 --ip 1.2.3.4 --port 8091
 
 # Recycle alpha back to TAO
-agcli stake recycle-alpha 100.0 --netuid 1
+agcli stake recycle-alpha --amount 100.0 --netuid 1
 
 # Dissolve a subnet (owner only)
-agcli subnet dissolve 42
+agcli subnet dissolve --netuid 42
 
 # Add a proxy account
-agcli proxy add 5DelegateAddr... --proxy-type staking --delay 0
+agcli proxy add --delegate 5DelegateAddr... --proxy-type staking --delay 0
 
 # Remove a proxy account
-agcli proxy remove 5DelegateAddr... --proxy-type staking
+agcli proxy remove --delegate 5DelegateAddr... --proxy-type staking
 
 # Simulate TAO→Alpha swap (with slippage + fees)
 agcli view swap-sim --netuid 1 --tao 10.0
@@ -189,36 +195,63 @@ agcli view swap-sim --netuid 1 --tao 10.0
 agcli view swap-sim --netuid 1 --alpha 500.0
 
 # View who nominates to a validator
-agcli view nominations 5HotkeyAddr...
+agcli view nominations --hotkey 5HotkeyAddr...
 
 # Unstake all alpha across all subnets
 agcli stake unstake-all-alpha
 
 # Burn alpha tokens permanently
-agcli stake burn-alpha 100.0 --netuid 1
+agcli stake burn-alpha --amount 100.0 --netuid 1
 
 # Swap stake between subnets with limit price
-agcli stake swap-limit 100.0 --from 1 --to 2 --price 0.5 --partial
+agcli stake swap-limit --amount 100.0 --from 1 --to 2 --price 0.5 --partial
 
 # List proxy accounts
 agcli proxy list --address 5Gx...
 
 # Crowdloan — contribute
-agcli crowdloan contribute 1 10.0
+agcli crowdloan contribute --crowdloan-id 1 --amount 10.0
 
 # Crowdloan — withdraw contribution
-agcli crowdloan withdraw 1
+agcli crowdloan withdraw --crowdloan-id 1
 
 # Crowdloan — finalize
-agcli crowdloan finalize 1
+agcli crowdloan finalize --crowdloan-id 1
+
+# Subnet liquidity dashboard (AMM depth, slippage estimates)
+agcli subnet liquidity --netuid 1
+
+# Subnet health (miner status, weight vs consensus)
+agcli subnet health --netuid 1
+
+# Subnet emissions (who earns what, projected next epoch)
+agcli subnet emissions --netuid 1
+
+# Subnet registration cost + trend
+agcli subnet cost --netuid 1
+
+# Live subnet watcher (tempo countdown, rate limits)
+agcli subnet watch --netuid 1 --interval 12
+
+# Subnet monitor (track registrations, anomalies)
+agcli subnet monitor --netuid 1 --json
+
+# Batch extrinsics from JSON file
+agcli batch --file calls.json
+agcli batch --file calls.json --no-atomic
 
 # Self-update to latest version
 agcli update
 
 # Shell completions
-agcli completions bash > /etc/bash_completion.d/agcli
-agcli completions zsh > ~/.zfunc/_agcli
-agcli completions fish > ~/.config/fish/completions/agcli.fish
+agcli completions --shell bash > /etc/bash_completion.d/agcli
+agcli completions --shell zsh > ~/.zfunc/_agcli
+agcli completions --shell fish > ~/.config/fish/completions/agcli.fish
+
+# Explain Bittensor concepts
+agcli explain
+agcli explain --topic tempo
+agcli --output json explain --topic commit-reveal
 ```
 
 ### SDK Usage (as library)
@@ -264,6 +297,33 @@ async fn main() -> anyhow::Result<()> {
 
     Ok(())
 }
+```
+
+## JSON Output Examples
+
+Every data command supports `--output json` for agent/pipeline consumption:
+
+```bash
+# Balance → {"free": "1234.567", "staked": "500.0", "total": "1734.567"}
+agcli --output json balance --address 5Gx...
+
+# Subnet list → [{"netuid": 1, "name": "Prompting", "tao_in": "...", ...}]
+agcli --output json subnet list
+
+# Portfolio → {"coldkey": "5Gx...", "total_tao": "1234.56", "positions": [...]}
+agcli --output json view portfolio
+
+# Wallet list → [{"name": "default", "coldkey": "5Gx..."}]
+agcli --output json wallet list
+
+# Wallet show → [{"name": "default", "coldkey": "5Gx...", "hotkeys": [{"name": "default", "address": "5Hx..."}]}]
+agcli --output json wallet show --all
+
+# Explain topics → [{"topic": "tempo", "description": "..."}, ...]
+agcli --output json explain
+
+# Pretty-print with --pretty
+agcli --output json --pretty view dynamic
 ```
 
 ## Architecture
@@ -347,8 +407,10 @@ AGCLI_PASSWORD=pass  # Same as --password
 agcli wallet create --name mywallet --password mypass --yes
 agcli wallet import --name w --mnemonic "abandon ... about" --password p
 agcli stake wizard --netuid 1 --amount 0.5 --password p --yes
-agcli stake add 10.0 --netuid 1 --password mypass --yes
-AGCLI_PASSWORD=mypass agcli transfer 5Dest... 1.0 --yes
+agcli stake add --amount 10.0 --netuid 1 --password mypass --yes
+AGCLI_PASSWORD=mypass agcli transfer --dest 5Dest... --amount 1.0 --yes
+agcli --output json view portfolio             # JSON output for parsing
+agcli --output json --pretty view dynamic      # Pretty-printed JSON
 
 # Exit codes: 0=success, 1=error, 2=usage error
 # Errors → stderr, data → stdout
