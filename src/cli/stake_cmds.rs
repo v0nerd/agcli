@@ -47,27 +47,15 @@ pub async fn handle_stake(
         }
         StakeCommands::Add { amount, netuid, hotkey } => {
             let (pair, hk) = unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, hotkey, password)?;
-            let bal = Balance::from_tao(amount);
-            println!("Adding stake: {} to {} on SN{}", bal.display_tao(), crate::utils::short_ss58(&hk), netuid);
-            let hash = client.add_stake(&pair, &hk, NetUid(netuid), bal).await?;
-            println!("Stake added. Tx: {}", hash);
-            Ok(())
+            stake_op("Adding", "added", &hk, client.add_stake(&pair, &hk, NetUid(netuid), Balance::from_tao(amount)).await)
         }
         StakeCommands::Remove { amount, netuid, hotkey } => {
             let (pair, hk) = unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, hotkey, password)?;
-            let bal = Balance::from_tao(amount);
-            println!("Removing stake: {} from {} on SN{}", bal.display_tao(), crate::utils::short_ss58(&hk), netuid);
-            let hash = client.remove_stake(&pair, &hk, NetUid(netuid), bal).await?;
-            println!("Stake removed. Tx: {}", hash);
-            Ok(())
+            stake_op("Removing", "removed", &hk, client.remove_stake(&pair, &hk, NetUid(netuid), Balance::from_tao(amount)).await)
         }
         StakeCommands::Move { amount, from, to, hotkey } => {
             let (pair, hk) = unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, hotkey, password)?;
-            let bal = Balance::from_tao(amount);
-            println!("Moving stake: {} from SN{} to SN{} on {}", bal.display_tao(), from, to, crate::utils::short_ss58(&hk));
-            let hash = client.move_stake(&pair, &hk, NetUid(from), NetUid(to), bal).await?;
-            println!("Stake moved. Tx: {}", hash);
-            Ok(())
+            stake_op("Moving", "moved", &hk, client.move_stake(&pair, &hk, NetUid(from), NetUid(to), Balance::from_tao(amount)).await)
         }
         StakeCommands::Swap { amount, netuid, from_hotkey, to_hotkey } => {
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
@@ -80,10 +68,7 @@ pub async fn handle_stake(
         }
         StakeCommands::UnstakeAll { hotkey } => {
             let (pair, hk) = unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, hotkey, password)?;
-            println!("Unstaking all from {}", crate::utils::short_ss58(&hk));
-            let hash = client.unstake_all(&pair, &hk).await?;
-            println!("All stake removed. Tx: {}", hash);
-            Ok(())
+            stake_op("Unstaking all from", "removed", &hk, client.unstake_all(&pair, &hk).await)
         }
         StakeCommands::ClaimRoot { hotkey: _, netuid } => {
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
@@ -128,26 +113,15 @@ pub async fn handle_stake(
         }
         StakeCommands::RecycleAlpha { amount, netuid, hotkey } => {
             let (pair, hk) = unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, hotkey, password)?;
-            let amt = (amount * 1_000_000_000.0) as u64;
-            println!("Recycling {:.4} alpha on SN{} for TAO via {}", amount, netuid, crate::utils::short_ss58(&hk));
-            let hash = client.recycle_alpha(&pair, &hk, NetUid(netuid), amt).await?;
-            println!("Alpha recycled. Tx: {}", hash);
-            Ok(())
+            stake_op("Recycling alpha via", "recycled", &hk, client.recycle_alpha(&pair, &hk, NetUid(netuid), (amount * 1e9) as u64).await)
         }
         StakeCommands::UnstakeAllAlpha { hotkey } => {
             let (pair, hk) = unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, hotkey, password)?;
-            println!("Unstaking all alpha from {}", crate::utils::short_ss58(&hk));
-            let hash = client.unstake_all_alpha(&pair, &hk).await?;
-            println!("All alpha unstaked. Tx: {}", hash);
-            Ok(())
+            stake_op("Unstaking all alpha from", "unstaked", &hk, client.unstake_all_alpha(&pair, &hk).await)
         }
         StakeCommands::BurnAlpha { amount, netuid, hotkey } => {
             let (pair, hk) = unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, hotkey, password)?;
-            let amt = (amount * 1_000_000_000.0) as u64;
-            println!("Burning {:.4} alpha on SN{} via {}", amount, netuid, crate::utils::short_ss58(&hk));
-            let hash = client.burn_alpha(&pair, &hk, amt, NetUid(netuid)).await?;
-            println!("Alpha burned. Tx: {}", hash);
-            Ok(())
+            stake_op("Burning alpha via", "burned", &hk, client.burn_alpha(&pair, &hk, (amount * 1e9) as u64, NetUid(netuid)).await)
         }
         StakeCommands::SwapLimit { amount, from, to, price, partial, hotkey } => {
             let (pair, hk) = unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, hotkey, password)?;
@@ -162,6 +136,14 @@ pub async fn handle_stake(
             staking_wizard(client, wallet_dir, wallet_name, hotkey_name, password, yes, netuid, amount, hotkey).await
         }
     }
+}
+
+/// Common pattern for stake operations: print action, handle result.
+fn stake_op(action: &str, past: &str, hotkey: &str, result: Result<String>) -> Result<()> {
+    println!("{} {}", action, crate::utils::short_ss58(hotkey));
+    let hash = result?;
+    println!("Stake {}. Tx: {}", past, hash);
+    Ok(())
 }
 
 async fn staking_wizard(

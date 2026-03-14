@@ -638,79 +638,57 @@ async fn handle_staking_analytics(client: &Client, address: &str, output: &str) 
 
 async fn handle_swap_sim(client: &Client, netuid: u16, tao: Option<f64>, alpha: Option<f64>, output: &str) -> Result<()> {
     use crate::types::NetUid;
-
     let price_raw = client.current_alpha_price(NetUid(netuid)).await?;
-    let price = price_raw as f64 / 1_000_000_000.0;
+    let price = price_raw as f64 / 1e9;
 
-    if let Some(tao_amount) = tao {
-        let tao_rao = (tao_amount * 1_000_000_000.0) as u64;
-        let (alpha_out, tao_fee, alpha_fee) = client.sim_swap_tao_for_alpha(NetUid(netuid), tao_rao).await?;
-        let alpha_display = alpha_out as f64 / 1_000_000_000.0;
-        let tao_fee_display = tao_fee as f64 / 1_000_000_000.0;
-        let alpha_fee_display = alpha_fee as f64 / 1_000_000_000.0;
-        if output == "json" {
-            println!("{}", serde_json::json!({
-                "direction": "tao_to_alpha",
-                "netuid": netuid,
-                "tao_in": tao_amount,
-                "alpha_out": alpha_display,
-                "tao_fee": tao_fee_display,
-                "alpha_fee": alpha_fee_display,
-                "effective_price": if alpha_display > 0.0 { tao_amount / alpha_display } else { 0.0 },
-                "current_price": price,
-            }));
-        } else {
-            println!("Swap Simulation — SN{}", netuid);
-            println!("  Direction:       TAO → Alpha");
-            println!("  TAO in:          {:.4} τ", tao_amount);
-            println!("  Alpha out:       {:.4} α", alpha_display);
-            println!("  TAO fee:         {:.6} τ", tao_fee_display);
-            println!("  Alpha fee:       {:.6} α", alpha_fee_display);
-            let eff_price = if alpha_display > 0.0 { tao_amount / alpha_display } else { 0.0 };
-            println!("  Effective price: {:.6} τ/α", eff_price);
-            println!("  Current price:   {:.6} τ/α", price);
-            let slippage = if price > 0.0 { ((eff_price - price) / price).abs() * 100.0 } else { 0.0 };
-            println!("  Slippage:        {:.2}%", slippage);
+    // Determine direction and fetch simulation
+    let sim = match (tao, alpha) {
+        (Some(tao_amt), _) => {
+            let (out, tf, af) = client.sim_swap_tao_for_alpha(NetUid(netuid), (tao_amt * 1e9) as u64).await?;
+            let out_f = out as f64 / 1e9;
+            Some(("tao_to_alpha", "TAO → Alpha", tao_amt, "τ", out_f, "α",
+                  tf as f64 / 1e9, af as f64 / 1e9,
+                  if out_f > 0.0 { tao_amt / out_f } else { 0.0 }))
         }
-    } else if let Some(alpha_amount) = alpha {
-        let alpha_raw = (alpha_amount * 1_000_000_000.0) as u64;
-        let (tao_out, tao_fee, alpha_fee) = client.sim_swap_alpha_for_tao(NetUid(netuid), alpha_raw).await?;
-        let tao_display = tao_out as f64 / 1_000_000_000.0;
-        let tao_fee_display = tao_fee as f64 / 1_000_000_000.0;
-        let alpha_fee_display = alpha_fee as f64 / 1_000_000_000.0;
-        if output == "json" {
-            println!("{}", serde_json::json!({
-                "direction": "alpha_to_tao",
-                "netuid": netuid,
-                "alpha_in": alpha_amount,
-                "tao_out": tao_display,
-                "tao_fee": tao_fee_display,
-                "alpha_fee": alpha_fee_display,
-                "effective_price": if alpha_amount > 0.0 { tao_display / alpha_amount } else { 0.0 },
-                "current_price": price,
-            }));
-        } else {
-            println!("Swap Simulation — SN{}", netuid);
-            println!("  Direction:       Alpha → TAO");
-            println!("  Alpha in:        {:.4} α", alpha_amount);
-            println!("  TAO out:         {:.4} τ", tao_display);
-            println!("  TAO fee:         {:.6} τ", tao_fee_display);
-            println!("  Alpha fee:       {:.6} α", alpha_fee_display);
-            let eff_price = if alpha_amount > 0.0 { tao_display / alpha_amount } else { 0.0 };
-            println!("  Effective price: {:.6} τ/α", eff_price);
-            println!("  Current price:   {:.6} τ/α", price);
-            let slippage = if price > 0.0 { ((eff_price - price) / price).abs() * 100.0 } else { 0.0 };
-            println!("  Slippage:        {:.2}%", slippage);
+        (_, Some(alpha_amt)) => {
+            let (out, tf, af) = client.sim_swap_alpha_for_tao(NetUid(netuid), (alpha_amt * 1e9) as u64).await?;
+            let out_f = out as f64 / 1e9;
+            Some(("alpha_to_tao", "Alpha → TAO", alpha_amt, "α", out_f, "τ",
+                  tf as f64 / 1e9, af as f64 / 1e9,
+                  if alpha_amt > 0.0 { out_f / alpha_amt } else { 0.0 }))
         }
-    } else {
-        if output == "json" {
-            println!("{}", serde_json::json!({
-                "netuid": netuid,
-                "current_price": price,
-            }));
-        } else {
-            println!("SN{} current alpha price: {:.6} τ/α", netuid, price);
-            println!("Use --tao <amount> to simulate TAO→Alpha, or --alpha <amount> for Alpha→TAO");
+        _ => None,
+    };
+
+    match sim {
+        Some((dir, dir_label, amt_in, sym_in, amt_out, sym_out, tao_fee, alpha_fee, eff_price)) => {
+            if output == "json" {
+                println!("{}", serde_json::json!({
+                    "direction": dir, "netuid": netuid,
+                    "amount_in": amt_in, "amount_out": amt_out,
+                    "tao_fee": tao_fee, "alpha_fee": alpha_fee,
+                    "effective_price": eff_price, "current_price": price,
+                }));
+            } else {
+                let slippage = if price > 0.0 { ((eff_price - price) / price).abs() * 100.0 } else { 0.0 };
+                println!("Swap Simulation — SN{}", netuid);
+                println!("  Direction:       {}", dir_label);
+                println!("  In:              {:.4} {}", amt_in, sym_in);
+                println!("  Out:             {:.4} {}", amt_out, sym_out);
+                println!("  TAO fee:         {:.6} τ", tao_fee);
+                println!("  Alpha fee:       {:.6} α", alpha_fee);
+                println!("  Effective price: {:.6} τ/α", eff_price);
+                println!("  Current price:   {:.6} τ/α", price);
+                println!("  Slippage:        {:.2}%", slippage);
+            }
+        }
+        None => {
+            if output == "json" {
+                println!("{}", serde_json::json!({"netuid": netuid, "current_price": price}));
+            } else {
+                println!("SN{} current alpha price: {:.6} τ/α", netuid, price);
+                println!("Use --tao <amount> to simulate TAO→Alpha, or --alpha <amount> for Alpha→TAO");
+            }
         }
     }
     Ok(())

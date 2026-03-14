@@ -503,22 +503,27 @@ async fn handle_delegate(
             Ok(())
         }
         DelegateCommands::DecreaseTake { take, hotkey } => {
-            let (pair, hk) = unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, hotkey, password)?;
-            let take_u16 = (take / 100.0 * 65535.0).min(65535.0) as u16;
-            println!("Decreasing take to {:.2}% for {}", take, crate::utils::short_ss58(&hk));
-            let hash = client.decrease_take(&pair, &hk, take_u16).await?;
-            println!("Take decreased. Tx: {}", hash);
-            Ok(())
+            change_take(client, wallet_dir, wallet_name, hotkey_name, hotkey, password, take, false).await
         }
         DelegateCommands::IncreaseTake { take, hotkey } => {
-            let (pair, hk) = unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, hotkey, password)?;
-            let take_u16 = (take / 100.0 * 65535.0).min(65535.0) as u16;
-            println!("Increasing take to {:.2}% for {}", take, crate::utils::short_ss58(&hk));
-            let hash = client.increase_take(&pair, &hk, take_u16).await?;
-            println!("Take increased. Tx: {}", hash);
-            Ok(())
+            change_take(client, wallet_dir, wallet_name, hotkey_name, hotkey, password, take, true).await
         }
     }
+}
+
+async fn change_take(client: &Client, wallet_dir: &str, wallet_name: &str, hotkey_name: &str,
+    hotkey: Option<String>, password: Option<&str>, take: f64, increase: bool) -> Result<()> {
+    let (pair, hk) = unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, hotkey, password)?;
+    let take_u16 = (take / 100.0 * 65535.0).min(65535.0) as u16;
+    let dir = if increase { "Increasing" } else { "Decreasing" };
+    println!("{} take to {:.2}% for {}", dir, take, crate::utils::short_ss58(&hk));
+    let hash = if increase {
+        client.increase_take(&pair, &hk, take_u16).await?
+    } else {
+        client.decrease_take(&pair, &hk, take_u16).await?
+    };
+    println!("Take {}. Tx: {}", if increase { "increased" } else { "decreased" }, hash);
+    Ok(())
 }
 
 // ──────── Identity ────────
@@ -834,21 +839,20 @@ async fn handle_proxy(
     output: &str,
     password: Option<&str>,
 ) -> Result<()> {
+    let adding = matches!(cmd, ProxyCommands::Add { .. });
     match cmd {
-        ProxyCommands::Add { delegate, proxy_type, delay } => {
-            let mut wallet = open_wallet(wallet_dir, wallet_name)?;
-            unlock_coldkey(&mut wallet, password)?;
-            println!("Adding proxy: {} (type={}, delay={})", crate::utils::short_ss58(&delegate), proxy_type, delay);
-            let hash = client.add_proxy(wallet.coldkey()?, &delegate, &proxy_type, delay).await?;
-            println!("Proxy added. Tx: {}", hash);
-            Ok(())
-        }
+        ProxyCommands::Add { delegate, proxy_type, delay } |
         ProxyCommands::Remove { delegate, proxy_type, delay } => {
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
             unlock_coldkey(&mut wallet, password)?;
-            println!("Removing proxy: {} (type={}, delay={})", crate::utils::short_ss58(&delegate), proxy_type, delay);
-            let hash = client.remove_proxy(wallet.coldkey()?, &delegate, &proxy_type, delay).await?;
-            println!("Proxy removed. Tx: {}", hash);
+            let verb = if adding { "Adding" } else { "Removing" };
+            println!("{} proxy: {} (type={}, delay={})", verb, crate::utils::short_ss58(&delegate), proxy_type, delay);
+            let hash = if adding {
+                client.add_proxy(wallet.coldkey()?, &delegate, &proxy_type, delay).await?
+            } else {
+                client.remove_proxy(wallet.coldkey()?, &delegate, &proxy_type, delay).await?
+            };
+            println!("Proxy {}. Tx: {}", if adding { "added" } else { "removed" }, hash);
             Ok(())
         }
         ProxyCommands::List { address } => {
@@ -886,37 +890,29 @@ async fn handle_crowdloan(
     client: &Client,
     wallet_dir: &str,
     wallet_name: &str,
-    output: &str,
+    _output: &str,
     password: Option<&str>,
 ) -> Result<()> {
-    let _ = output;
-    match cmd {
+    let mut wallet = open_wallet(wallet_dir, wallet_name)?;
+    unlock_coldkey(&mut wallet, password)?;
+    let pair = wallet.coldkey()?;
+    let (action, hash) = match cmd {
         CrowdloanCommands::Contribute { crowdloan_id, amount } => {
-            let mut wallet = open_wallet(wallet_dir, wallet_name)?;
-            unlock_coldkey(&mut wallet, password)?;
             let bal = Balance::from_tao(amount);
             println!("Contributing {} to crowdloan #{}", bal.display_tao(), crowdloan_id);
-            let hash = client.crowdloan_contribute(wallet.coldkey()?, crowdloan_id, bal).await?;
-            println!("Contribution submitted. Tx: {}", hash);
-            Ok(())
+            ("Contribution submitted", client.crowdloan_contribute(pair, crowdloan_id, bal).await?)
         }
         CrowdloanCommands::Withdraw { crowdloan_id } => {
-            let mut wallet = open_wallet(wallet_dir, wallet_name)?;
-            unlock_coldkey(&mut wallet, password)?;
             println!("Withdrawing from crowdloan #{}", crowdloan_id);
-            let hash = client.crowdloan_withdraw(wallet.coldkey()?, crowdloan_id).await?;
-            println!("Withdrawal submitted. Tx: {}", hash);
-            Ok(())
+            ("Withdrawal submitted", client.crowdloan_withdraw(pair, crowdloan_id).await?)
         }
         CrowdloanCommands::Finalize { crowdloan_id } => {
-            let mut wallet = open_wallet(wallet_dir, wallet_name)?;
-            unlock_coldkey(&mut wallet, password)?;
             println!("Finalizing crowdloan #{}", crowdloan_id);
-            let hash = client.crowdloan_finalize(wallet.coldkey()?, crowdloan_id).await?;
-            println!("Crowdloan finalized. Tx: {}", hash);
-            Ok(())
+            ("Crowdloan finalized", client.crowdloan_finalize(pair, crowdloan_id).await?)
         }
-    }
+    };
+    println!("{}. Tx: {}", action, hash);
+    Ok(())
 }
 
 // ──────── Completions ────────

@@ -1,77 +1,139 @@
 # agcli — LLM/Agent Reference
 
 ## What is agcli?
-A Rust CLI and SDK for the Bittensor decentralized AI network. It lets you manage wallets, stake TAO, transfer tokens, register on subnets, set weights, query chain state, view Dynamic TAO pricing, and manage identities. All data commands support `--output json` and `--output csv` for machine-readable output. Compatible with Python bittensor-wallet keyfiles.
+A Rust CLI and SDK for the Bittensor decentralized AI network. Manage wallets, stake TAO, transfer tokens, register on subnets, set weights, query chain state, view Dynamic TAO pricing, and manage identities. All data commands support `--output json` and `--output csv` for machine-readable output. Compatible with Python bittensor-wallet keyfiles (NaCl SecretBox + JSON format).
 
 ## Installation
 ```bash
 cargo install --git https://github.com/unconst/agcli
 ```
 
+## Agent / Non-Interactive Mode
+
+Every command is fully scriptable with zero stdin blocking when all required args are provided.
+
+### Global Flags
+| Flag | Env Var | Description |
+|------|---------|-------------|
+| `--yes` / `-y` | `AGCLI_YES=1` | Skip all confirmation prompts |
+| `--password PW` | `AGCLI_PASSWORD=PW` | Wallet password (avoids interactive prompt) |
+| `--output json` | — | Machine-readable JSON output |
+| `--output csv` | — | CSV output for data commands |
+| `--network NET` | `AGCLI_NETWORK=NET` | Network: finney, test, local, or URL |
+| `--endpoint URL` | `AGCLI_ENDPOINT=URL` | Custom chain endpoint (overrides --network) |
+| `--wallet-dir DIR` | `AGCLI_WALLET_DIR=DIR` | Wallet directory (default: ~/.bittensor/wallets) |
+| `-w NAME` / `--wallet NAME` | `AGCLI_WALLET=NAME` | Wallet name (default: "default") |
+| `--hotkey NAME` | `AGCLI_HOTKEY=NAME` | Hotkey name (default: "default") |
+| `--proxy SS58` | `AGCLI_PROXY=SS58` | Wrap extrinsics through Proxy.proxy |
+| `--live [SECS]` | — | Enable live polling mode (default 12s) |
+
+### Exit Codes
+- 0 = success
+- 1 = error (details on stderr)
+
+### Agent Examples
+```bash
+# Create wallet non-interactively
+agcli wallet create --name mywallet --password mypass --yes
+
+# Import from mnemonic
+agcli wallet import --name mywallet --mnemonic "word1 word2 ... word12" --password mypass
+
+# Stake with zero interaction
+agcli stake add 10.0 --netuid 1 --password mypass --yes
+
+# Stake wizard fully scripted
+agcli stake wizard --netuid 1 --amount 5.0 --password mypass --yes
+
+# Query balance as JSON
+agcli --output json balance --address 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
+
+# List all subnets as JSON
+agcli --output json subnet list
+
+# Get staking analytics as JSON
+agcli --output json view staking-analytics --address 5Gx...
+
+# Transfer TAO
+agcli transfer 5Dest... 10.0 --password mypass --yes
+
+# Simulate swap
+agcli --output json view swap-sim --netuid 1 --tao 10.0
+```
+
 ## Core Commands
 
 ### Wallet
-- `agcli wallet create --name NAME` — create new wallet (coldkey + hotkey)
+- `agcli wallet create --name NAME [--password PW]` — create new wallet (coldkey + hotkey)
 - `agcli wallet list` — list wallets
-- `agcli wallet show --all` — show all wallets with hotkeys
-- `agcli wallet import --name NAME` — import from mnemonic
-- `agcli wallet regen-coldkey` — regenerate coldkey from mnemonic
+- `agcli wallet show [--all]` — show wallet details, use `-w NAME` to filter
+- `agcli wallet import --name NAME [--mnemonic "..."] [--password PW]` — import from mnemonic
+- `agcli wallet regen-coldkey [--mnemonic "..."] [--password PW]` — regenerate coldkey
+- `agcli wallet regen-hotkey --name NAME [--mnemonic "..."]` — regenerate hotkey
 - `agcli wallet new-hotkey NAME` — create new hotkey
-- Note: automatically reads Python bittensor-wallet keyfiles (NaCl SecretBox + JSON format)
+- Note: reads Python bittensor-wallet keyfiles (NaCl SecretBox + JSON)
 
 ### Balance & Transfer
-- `agcli balance` — show your balance
-- `agcli balance --address SS58` — show someone's balance
+- `agcli balance [--address SS58]` — show balance
 - `agcli transfer DEST_SS58 AMOUNT_TAO` — send TAO
-- `agcli transfer-all DEST_SS58` — send entire balance (minus fees)
-- `agcli transfer-all DEST_SS58 --keep-alive` — send all but keep account alive
+- `agcli transfer-all DEST_SS58 [--keep-alive]` — send entire balance
 
 ### Staking
-- `agcli stake add AMOUNT --netuid N` — stake TAO on subnet
-- `agcli stake remove AMOUNT --netuid N` — unstake
-- `agcli stake list` — show all stakes
-- `agcli stake move AMOUNT --from SRC --to DST` — move between subnets
+- `agcli stake add AMOUNT --netuid N [--hotkey SS58]` — stake TAO on subnet
+- `agcli stake remove AMOUNT --netuid N [--hotkey SS58]` — unstake
+- `agcli stake list [--address SS58]` — show all stakes
+- `agcli stake move AMOUNT --from SRC --to DST [--hotkey SS58]` — move between subnets
 - `agcli stake swap AMOUNT --netuid N --from-hotkey HK1 --to-hotkey HK2` — swap between hotkeys
-- `agcli stake unstake-all` — unstake all from hotkey
+- `agcli stake unstake-all [--hotkey SS58]` — unstake all from hotkey
 - `agcli stake claim-root --netuid N` — claim root dividends
-- `agcli stake add-limit AMOUNT --netuid N --price P` — limit order stake
-- `agcli stake childkey-take PCT --netuid N` — set childkey take
+- `agcli stake add-limit AMOUNT --netuid N --price P [--partial] [--hotkey SS58]` — limit order stake
+- `agcli stake remove-limit AMOUNT --netuid N --price P [--partial] [--hotkey SS58]` — limit unstake
+- `agcli stake childkey-take PCT --netuid N [--hotkey SS58]` — set childkey take
 - `agcli stake set-children --netuid N --children "proportion:hotkey,..."` — set children
-- `agcli stake recycle-alpha AMOUNT --netuid N` — recycle alpha back to TAO
-- `agcli stake unstake-all-alpha` — unstake all alpha across all subnets for hotkey
-- `agcli stake burn-alpha AMOUNT --netuid N` — permanently burn alpha tokens
-- `agcli stake swap-limit AMOUNT --from SRC --to DST --price P` — swap between subnets with limit price
+- `agcli stake recycle-alpha AMOUNT --netuid N [--hotkey SS58]` — recycle alpha to TAO
+- `agcli stake unstake-all-alpha [--hotkey SS58]` — unstake all alpha across all subnets
+- `agcli stake burn-alpha AMOUNT --netuid N [--hotkey SS58]` — permanently burn alpha
+- `agcli stake swap-limit AMOUNT --from SRC --to DST --price P [--partial] [--hotkey SS58]` — limit swap
+- `agcli stake wizard [--netuid N] [--amount X] [--hotkey SS58]` — guided staking
 
 ### Subnets
-- `agcli subnet list` — list subnets with real names from DynamicInfo
-- `agcli subnet show N` — show subnet details with Dynamic TAO pricing
-- `agcli subnet metagraph N` — view metagraph
-- `agcli subnet hyperparams N` — show hyperparameters
+- `agcli subnet list` — list subnets with names, emissions, burn
+- `agcli subnet show N` — subnet details with Dynamic TAO pricing
+- `agcli subnet metagraph N` — view metagraph (neurons, stakes, ranks)
+- `agcli subnet hyperparams N` — show all hyperparameters
 - `agcli subnet register` — create new subnet
 - `agcli subnet register-neuron N` — register on subnet N (burn)
-- `agcli subnet pow N --threads 8` — POW registration (multi-threaded)
+- `agcli subnet pow N [--threads 8]` — POW registration (multi-threaded)
 - `agcli subnet dissolve N` — dissolve a subnet (owner only)
 
 ### Weights
-- `agcli weights set --netuid N "uid:weight,..."` — set weights
-- `agcli weights commit --netuid N "uid:weight,..."` — commit-reveal (blake2 hash)
-- `agcli weights reveal --netuid N "uid:weight,..." SALT` — reveal committed weights
+- `agcli weights set --netuid N "uid:weight,..." [--version-key K]` — set weights
+- `agcli weights commit --netuid N "uid:weight,..." [--salt S]` — commit-reveal
+- `agcli weights reveal --netuid N "uid:weight,..." SALT [--version-key K]` — reveal committed weights
 
 ### Delegates
 - `agcli delegate list` — list all delegates
-- `agcli delegate show --hotkey SS58` — show delegate info
-- `agcli delegate decrease-take PCT` — decrease validator take
-- `agcli delegate increase-take PCT` — increase validator take
+- `agcli delegate show [--hotkey SS58]` — show delegate info
+- `agcli delegate decrease-take PCT [--hotkey SS58]` — decrease validator take
+- `agcli delegate increase-take PCT [--hotkey SS58]` — increase validator take
 
-### View
-- `agcli view portfolio` — full stake portfolio with subnet names and prices
+### View / Query
+- `agcli view portfolio [--address SS58]` — full stake portfolio
 - `agcli view dynamic` — Dynamic TAO info (prices, pools, volumes, emissions)
 - `agcli view network` — network overview (block, issuance, stake, emission)
 - `agcli view neuron --netuid N UID` — full neuron detail
+- `agcli view validators [--netuid N] [--limit 50]` — top validators
+- `agcli view history [--address SS58] [--limit 20]` — recent extrinsics (Subscan)
+- `agcli view account [--address SS58]` — full account explorer
+- `agcli view subnet-analytics N` — detailed subnet analysis
+- `agcli view staking-analytics [--address SS58]` — APY and yield estimates
+- `agcli view swap-sim --netuid N [--tao X | --alpha X]` — swap simulation
+- `agcli view nominations HOTKEY_SS58` — who delegates to a validator
 
 ### Identity
-- `agcli identity show SS58` — query on-chain identity (Registry pallet)
-- `agcli identity set-subnet N --name "Name" --github "repo"` — set subnet identity
+- `agcli identity show SS58` — query on-chain identity
+- `agcli identity set --name "..." [--url "..."] [--github "..."]` — set identity
+- `agcli identity set-subnet N --name "..." [--github "..."] [--url "..."]` — set subnet identity
 
 ### Swap
 - `agcli swap hotkey NEW_SS58` — swap hotkey
@@ -81,176 +143,127 @@ cargo install --git https://github.com/unconst/agcli
 - `agcli root register` — register on root network
 - `agcli root weights "netuid:weight,..."` — set root weights
 
-### Live Mode
-- `agcli --live view dynamic` — poll Dynamic TAO prices, show deltas (12s default)
-- `agcli --live 30 subnet metagraph 1` — track neuron changes every 30s
-- `agcli --live view portfolio` — watch your portfolio in real-time
-- Delta tracking highlights price changes, pool movements, stake/emission shifts
+### Serve (Miners)
+- `agcli serve axon --netuid N --ip IP --port PORT [--protocol 4] [--version 0]`
 
-### Event Subscription
+### Proxy
+- `agcli proxy add DELEGATE_SS58 [--proxy-type TYPE] [--delay 0]`
+- `agcli proxy remove DELEGATE_SS58 [--proxy-type TYPE] [--delay 0]`
+- `agcli proxy list [--address SS58]`
+- Types: any, owner, staking, non_transfer, non_critical, governance, senate
+
+### Multisig
+- `agcli multisig address "SS58_1,SS58_2,..." --threshold N` — derive multisig address
+- `agcli multisig submit --others "..." --threshold N --pallet P --call C [--args JSON]`
+- `agcli multisig approve --others "..." --threshold N --call-hash 0x...`
+
+### Crowdloan
+- `agcli crowdloan contribute ID AMOUNT_TAO`
+- `agcli crowdloan withdraw ID`
+- `agcli crowdloan finalize ID`
+
+### Subscribe (Real-time)
 - `agcli subscribe blocks` — watch finalized blocks
-- `agcli subscribe events` — stream all chain events
-- `agcli subscribe events staking` — filter staking events only
-- `agcli subscribe events transfer` — filter balance transfer events
-- Supports `--output json` for structured event streaming
-- Filter categories: all, staking, registration, transfer, weights, subnet
+- `agcli subscribe events [FILTER]` — stream chain events
+- Filters: all, staking, registration, transfer, weights, subnet
+
+### Live Mode
+- `agcli --live view dynamic` — poll Dynamic TAO prices with delta tracking
+- `agcli --live 30 subnet metagraph 1` — track neuron changes every 30s
+- `agcli --live view portfolio` — watch portfolio in real-time
 
 ### Configuration
 - `agcli config show` — show current config
-- `agcli config set KEY VALUE` — set: network, endpoint, wallet_dir, wallet, hotkey, output, proxy, live_interval
-- `agcli config unset KEY` — remove a setting
+- `agcli config set KEY VALUE` — set persistent config
+- `agcli config unset KEY` — remove config value
 - `agcli config path` — show config file path (~/.agcli/config.toml)
+- Keys: network, endpoint, wallet_dir, wallet, hotkey, output, proxy, live_interval
 - Priority: CLI flags > env vars > config file > defaults
 
-### Proxy
-- `agcli --proxy SS58 <command>` — wrap any extrinsic through Proxy.proxy for delegated signing
-- `agcli proxy add DELEGATE_SS58 --proxy-type staking --delay 0` — add a proxy account
-- `agcli proxy remove DELEGATE_SS58 --proxy-type staking` — remove a proxy account
-- `agcli proxy list` — list all proxy accounts for your wallet
-- `agcli proxy list --address SS58` — list proxies for any address
-- Types: any, owner, staking, non_transfer, non_critical, governance, senate
-- SDK: `client.proxy_call(&pair, "real_ss58", "Pallet", "call", fields).await?`
-- SDK: `client.list_proxies("SS58").await?` — returns Vec of (delegate, type, delay)
-
-### Serve (Miners)
-- `agcli serve axon --netuid N --ip IP --port PORT` — set axon endpoint
-- `agcli serve axon --netuid N --ip 1.2.3.4 --port 8091 --protocol 4 --version 0`
-- SDK: `client.serve_axon(&pair, netuid, &axon_info).await?`
-
-### Staking Wizard
-- `agcli stake wizard` — interactive guided staking flow
-- Shows balance, top subnets by pool, lets you pick subnet/amount, confirms before submitting
-
-### Validators
-- `agcli view validators` — top validators by total stake (delegates)
-- `agcli view validators --netuid 1` — validators on a specific subnet
-- `agcli view validators --limit 20` — limit results
-
-### Transaction History
-- `agcli view history` — recent extrinsics for your wallet (via Subscan API)
-- `agcli view history --address SS58 --limit 10` — specific address
-
-### Multisig
-- `agcli multisig address "SS58_1,SS58_2,SS58_3" --threshold 2` — derive multisig address
-- `agcli multisig submit --others "SS58_2,SS58_3" --threshold 2 --pallet Balances --call transfer_allow_death --args '[...]'` — submit call
-- `agcli multisig approve --others "SS58_2,SS58_3" --threshold 2 --call-hash 0xabc...` — approve pending call
-
-### Account Explorer
-- `agcli view account` — full account view: balance, stakes, identity, delegate status
-- `agcli view account --address SS58` — explore any account
-
-### Subnet Analytics
-- `agcli view subnet-analytics N` — detailed subnet analysis
-- Shows: neuron count, validator/miner split, unique owners, capacity
-- Economics: stake, emission, trust, incentive averages
-- Top 5 miners by incentive, top 5 validators by dividends
-
-### Staking Analytics
-- `agcli view staking-analytics` — APY and yield estimates for your stakes
-- `agcli view staking-analytics --address SS58` — for any address
-- Shows: estimated daily/monthly/yearly yield, weighted APY, per-position breakdown
-
-### Swap Simulation
-- `agcli view swap-sim --netuid N --tao 10.0` — simulate TAO→Alpha swap with slippage + fees
-- `agcli view swap-sim --netuid N --alpha 500.0` — simulate Alpha→TAO swap
-- `agcli view swap-sim --netuid N` — just show current alpha price
-- SDK: `client.sim_swap_tao_for_alpha(netuid, tao_rao).await?` — returns (alpha_out, tao_fee, alpha_fee)
-- SDK: `client.sim_swap_alpha_for_tao(netuid, alpha).await?` — returns (tao_out, tao_fee, alpha_fee)
-- SDK: `client.current_alpha_price(netuid).await?` — returns u64 price
-
-### Nominations
-- `agcli view nominations HOTKEY_SS58` — view who has delegated/nominated to a hotkey
-- SDK: `client.get_delegated("SS58").await?` — returns Vec<DelegateInfo>
-
-### Crowdloan
-- `agcli crowdloan contribute ID AMOUNT_TAO` — contribute TAO to a crowdloan
-- `agcli crowdloan withdraw ID` — withdraw contribution from active crowdloan
-- `agcli crowdloan finalize ID` — finalize a crowdloan that reached its cap
-- SDK: `client.crowdloan_contribute(&pair, id, amount).await?`
-- SDK: `client.crowdloan_withdraw(&pair, id).await?`
-- SDK: `client.crowdloan_finalize(&pair, id).await?`
-
-### Self-Update
-- `agcli update` — self-update to latest version from GitHub
-
-### Shell Completions
-- `agcli completions bash` — generate bash completions
-- `agcli completions zsh` — generate zsh completions
-- `agcli completions fish` — generate fish completions
-
-### Raw Calls (Advanced)
-- SDK method: `client.submit_raw_call(&pair, "PalletName", "call_name", fields)`
-- Enables calling any pallet (EVM, MEVShield, Contracts) without compile-time bindings
+### Utility
+- `agcli completions bash|zsh|fish|powershell` — generate shell completions
+- `agcli update` — self-update from GitHub
 
 ## Output Formats
-Add `--output json` or `--output csv` to data queries:
 ```bash
-agcli --output json subnet list
-agcli --output csv view dynamic
-agcli --output json view portfolio
-agcli --output csv subnet metagraph 1
-agcli --output json stake list
+agcli --output json subnet list        # JSON array of all subnets
+agcli --output csv view dynamic        # CSV with all dynamic TAO data
+agcli --output json view portfolio     # JSON portfolio with positions
+agcli --output csv subnet metagraph 1  # CSV metagraph data
+agcli --output json stake list         # JSON stake positions
 ```
 
-## SDK Usage
+## SDK Usage (Rust)
 ```rust
 use agcli::{Client, Config, Wallet, Balance};
 
+// Connect
 let client = Client::connect("wss://entrypoint-finney.opentensor.ai:443").await?;
+
+// Queries
 let balance = client.get_balance_ss58("5Gx...").await?;
 let subnets = client.get_all_subnets().await?;
 let stakes = client.get_stake_for_coldkey("5Gx...").await?;
 let metagraph = client.get_metagraph(1.into()).await?;
-// Dynamic TAO pricing
 let dynamic = client.get_all_dynamic_info().await?;
 let sn1 = client.get_dynamic_info(1.into()).await?;
-// Batch weight operations
-client.batch_set_weights(&pair, &[1,2], &[weights1, weights2], &[0,0]).await?;
-client.batch_commit_weights(&pair, &[1,2], &[hash1, hash2]).await?;
-// Event subscription
-agcli::events::subscribe_events(client.inner_client(), EventFilter::All, false).await?;
-// Raw call to any pallet (EVM, MEVShield, etc.)
-use subxt::dynamic::Value;
-client.submit_raw_call(&pair, "EVM", "associate_evm_key", vec![...]).await?;
-// Proxy call (delegate signing through proxy account)
-client.proxy_call(&pair, "5RealAccount...", "SubtensorModule", "add_stake", vec![...]).await?;
-// Multisig operations
-client.submit_multisig_call(&pair, &other_ids, 2, "Balances", "transfer_allow_death", vec![...]).await?;
-client.approve_multisig(&pair, &other_ids, 2, call_hash).await?;
+let delegates = client.get_delegates().await?;
+let neurons = client.get_neurons_lite(1.into()).await?;
+let identity = client.get_identity("5Gx...").await?;
+let proxies = client.list_proxies("5Gx...").await?;
+
+// Extrinsics (need wallet keypair)
+client.transfer(pair, "5Dest...", Balance::from_tao(10.0)).await?;
+client.add_stake(pair, "5Hotkey...", 1.into(), Balance::from_tao(5.0)).await?;
+client.remove_stake(pair, "5Hotkey...", 1.into(), Balance::from_tao(5.0)).await?;
+client.move_stake(pair, "5Hotkey...", 1.into(), 2.into(), Balance::from_tao(5.0)).await?;
+client.set_weights(pair, 1.into(), &uids, &weights, 0).await?;
+client.register_network(pair, "5Hotkey...").await?;
+client.burned_register(pair, 1.into(), "5Hotkey...").await?;
+
+// Batch operations
+client.batch_set_weights(pair, &[1,2], &[weights1, weights2], &[0,0]).await?;
+client.batch_commit_weights(pair, &[1,2], &[hash1, hash2]).await?;
+
 // Swap simulation
 let (alpha_out, tao_fee, alpha_fee) = client.sim_swap_tao_for_alpha(1.into(), 10_000_000_000).await?;
 let (tao_out, _, _) = client.sim_swap_alpha_for_tao(1.into(), alpha_amount).await?;
 let price = client.current_alpha_price(1.into()).await?;
-// Crowdloan
-client.crowdloan_contribute(&pair, 1, Balance::from_tao(10.0)).await?;
-client.crowdloan_withdraw(&pair, 1).await?;
-// Unstake all alpha / Burn alpha
-client.unstake_all_alpha(&pair, "5Hotkey...").await?;
-client.burn_alpha(&pair, "5Hotkey...", amount_raw, netuid).await?;
-// Swap stake with limit
-client.swap_stake_limit(&pair, "5Hotkey...", from_net, to_net, amount, price, allow_partial).await?;
-// List proxies
-let proxies = client.list_proxies("5Gx...").await?;
-// Nominations
-let delegates = client.get_delegated("5Hotkey...").await?;
-// Load persistent config
+
+// Advanced: raw call to any pallet
+client.submit_raw_call(pair, "EVM", "associate_evm_key", vec![...]).await?;
+
+// Proxy delegation
+client.proxy_call(pair, "5RealAccount...", "SubtensorModule", "add_stake", vec![...]).await?;
+
+// Multisig
+client.submit_multisig_call(pair, &other_ids, 2, "Balances", "transfer_allow_death", vec![...]).await?;
+client.approve_multisig(pair, &other_ids, 2, call_hash).await?;
+
+// Event subscription
+agcli::events::subscribe_events(client.inner_client(), EventFilter::All, false).await?;
+
+// Config
 let cfg = Config::load();
 println!("Network: {:?}", cfg.network);
 ```
 
 ## Key Concepts
-- TAO = native token, 1 TAO = 1e9 RAO
-- Subnet = independent network with netuid (u16)
-- Coldkey = main signing key (encrypted), Hotkey = automated key (plaintext)
-- Weights = validators score miners, u16 values normalized to [0,1]
-- Dynamic TAO = each subnet has alpha token, price determined by AMM pool
-  - `tao_in` = TAO locked in subnet pool
-  - `alpha_in` / `alpha_out` = alpha token balances
-  - `price` = moving average price in TAO per alpha unit
-- Root (SN0) = governs cross-subnet emissions
-- Batch ops = set/commit/reveal weights across multiple subnets atomically
+- **TAO** = native token, 1 TAO = 1e9 RAO (u64)
+- **Subnet** = independent network with netuid (u16), 0 = root
+- **Coldkey** = main signing key (encrypted), **Hotkey** = automated key (plaintext)
+- **Weights** = validators score miners, u16 values normalized to [0, 1]
+- **Dynamic TAO** = each subnet has alpha token with AMM pricing
+  - `tao_in` = TAO locked in pool, `alpha_in/out` = alpha balances
+  - `price` = moving average price (τ/α), 32 fractional bits
+- **Emission** = TAO minted per block, distributed across subnets
+- **Staking** = lock TAO on a subnet behind a hotkey to earn emission
+- **Delegates** = validators who accept nominations from other coldkeys
+- **Commit-reveal** = privacy-preserving weight setting (blake2 hash → reveal)
 
 ## Networks
-- finney: wss://entrypoint-finney.opentensor.ai:443 (mainnet)
-- test: wss://test.finney.opentensor.ai:443
-- local: ws://127.0.0.1:9944
+| Name | URL | Description |
+|------|-----|-------------|
+| finney | wss://entrypoint-finney.opentensor.ai:443 | Mainnet |
+| test | wss://test.finney.opentensor.ai:443 | Testnet |
+| local | ws://127.0.0.1:9944 | Local dev node |
