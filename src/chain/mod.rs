@@ -88,10 +88,17 @@ impl Client {
             .sign_and_submit_then_watch_default(tx, &signer)
             .await
             .map_err(format_submit_error)?;
-        let result = progress
-            .wait_for_finalized_success()
-            .await
-            .map_err(format_dispatch_error)?;
+        let result = tokio::time::timeout(
+            std::time::Duration::from_secs(30),
+            progress.wait_for_finalized_success(),
+        )
+        .await
+        .map_err(|_| anyhow::anyhow!(
+            "Transaction timed out after 30s waiting for finalization. \
+             The extrinsic may have been dropped from the pool \
+             (insufficient balance, invalid state, or node not producing blocks)."
+        ))?
+        .map_err(format_dispatch_error)?;
         Ok(format!("{:?}", result.extrinsic_hash()))
     }
 

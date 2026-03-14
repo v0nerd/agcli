@@ -304,8 +304,7 @@ pub async fn execute(cli: Cli) -> Result<()> {
         }
         Commands::Update => handle_update().await,
         Commands::Explain { topic } => {
-            handle_explain(topic.as_deref(), output);
-            Ok(())
+            handle_explain(topic.as_deref(), output)
         }
         Commands::Audit { address } => {
             let client = Client::connect(network.ws_url()).await?;
@@ -496,7 +495,7 @@ async fn handle_subnet(
                         }
                     }
                 }
-                None => println!("Subnet {} not found.", netuid),
+                None => anyhow::bail!("Subnet {} not found.", netuid),
             }
             Ok(())
         }
@@ -2461,11 +2460,11 @@ async fn handle_identity(
             github,
             description,
         } => {
-            println!("Note: Account-level identity uses the Registry pallet.");
-            println!("Use 'agcli identity set-subnet' for subnet identity.");
-            println!("Name: {}, URL: {:?}, GitHub: {:?}", name, url, github);
-            let _ = description;
-            Ok(())
+            let _ = (&name, &url, &github, &description);
+            anyhow::bail!(
+                "Account-level identity (Registry pallet) is not yet supported.\n\
+                 Use 'agcli identity set-subnet' to set subnet identity instead."
+            );
         }
         IdentityCommands::SetSubnet {
             netuid,
@@ -3003,7 +3002,7 @@ fn cfg_value_display(key: &str, cfg: &crate::config::Config) -> String {
 
 // ──────── Explain ────────
 
-fn handle_explain(topic: Option<&str>, output: &str) {
+fn handle_explain(topic: Option<&str>, output: &str) -> Result<()> {
     match topic {
         Some(t) => match crate::utils::explain::explain(t) {
             Some(text) => {
@@ -3034,6 +3033,7 @@ fn handle_explain(topic: Option<&str>, output: &str) {
                     }
                     eprintln!("\nUsage: agcli explain --topic <topic>");
                 }
+                anyhow::bail!("Unknown topic '{}'", t);
             }
         },
         None => {
@@ -3052,6 +3052,7 @@ fn handle_explain(topic: Option<&str>, output: &str) {
             }
         }
     }
+    Ok(())
 }
 
 // ──────── Self-Update ────────
