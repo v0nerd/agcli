@@ -1887,3 +1887,23 @@ fn parse_explain_mev_shield() {
     let cli = agcli::cli::Cli::try_parse_from(["agcli", "explain", "--topic", "mev-shield"]);
     assert!(cli.is_ok());
 }
+
+// ──── Step 33 — explain limits, hyperparams, axon ────
+
+#[test]
+fn parse_explain_limits() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "explain", "--topic", "limits"]);
+    assert!(cli.is_ok());
+}
+
+#[test]
+fn parse_explain_hyperparams() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "explain", "--topic", "hyperparams"]);
+    assert!(cli.is_ok());
+}
+
+#[test]
+fn parse_explain_axon() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "explain", "--topic", "axon"]);
+    assert!(cli.is_ok());
+}

@@ -536,3 +536,61 @@ fn explain_mev_aliases() {
     assert!(explain::explain("mevshield").is_some());
     assert!(explain::explain("mevprotection").is_some());
 }
+
+// ──── Step 33 — explain limits, hyperparams, axon ────
+
+#[test]
+fn explain_limits_topic() {
+    let content = explain::explain("limits");
+    assert!(content.is_some(), "limits topic should exist");
+    let text = content.unwrap();
+    assert!(text.contains("weight"), "should mention weight limits");
+    assert!(text.contains("registration") || text.contains("Registration"));
+}
+
+#[test]
+fn explain_limits_aliases() {
+    assert!(explain::explain("networklimits").is_some());
+    assert!(explain::explain("chainlimits").is_some());
+    assert!(explain::explain("LIMITS").is_some());
+}
+
+#[test]
+fn explain_hyperparams_topic() {
+    let content = explain::explain("hyperparams");
+    assert!(content.is_some(), "hyperparams topic should exist");
+    let text = content.unwrap();
+    assert!(text.contains("tempo"), "should mention tempo");
+    assert!(text.contains("rho") || text.contains("kappa"));
+}
+
+#[test]
+fn explain_hyperparams_aliases() {
+    assert!(explain::explain("hyperparameters").is_some());
+    assert!(explain::explain("params").is_some());
+}
+
+#[test]
+fn explain_axon_topic() {
+    let content = explain::explain("axon");
+    assert!(content.is_some(), "axon topic should exist");
+    let text = content.unwrap();
+    assert!(text.contains("endpoint") || text.contains("IP"));
+    assert!(text.contains("miner") || text.contains("Miner"));
+}
+
+#[test]
+fn explain_axon_aliases() {
+    assert!(explain::explain("axoninfo").is_some());
+    assert!(explain::explain("serving").is_some());
+}
+
+#[test]
+fn explain_topic_count_25() {
+    let topics = explain::list_topics();
+    assert!(
+        topics.len() >= 25,
+        "Expected at least 25 topics, got {}",
+        topics.len()
+    );
+}

@@ -502,18 +502,22 @@ async fn handle_account_explorer(
         }
 
         if !stakes.is_empty() {
-            println!("\n  Stake Positions ({}):", stakes.len());
-            let mut table = comfy_table::Table::new();
-            table.set_header(vec!["Subnet", "Hotkey", "Stake (τ)", "Alpha"]);
-            for s in &stakes {
-                table.add_row(vec![
-                    format!("SN{}", s.netuid),
-                    crate::utils::short_ss58(&s.hotkey),
-                    s.stake.display_tao(),
-                    format!("{}", s.alpha_stake),
-                ]);
-            }
-            println!("{table}");
+            render_rows(
+                "table",
+                &stakes,
+                "",
+                |_| String::new(),
+                &["Subnet", "Hotkey", "Stake (τ)", "Alpha"],
+                |s| {
+                    vec![
+                        format!("SN{}", s.netuid),
+                        crate::utils::short_ss58(&s.hotkey),
+                        s.stake.display_tao(),
+                        format!("{}", s.alpha_stake),
+                    ]
+                },
+                Some(&format!("\n  Stake Positions ({}):", stakes.len())),
+            );
         }
         return Ok(());
     }
@@ -589,29 +593,37 @@ async fn handle_account_explorer(
     }
 
     if !stakes.is_empty() {
-        println!("\n  Stake Positions ({}):", stakes.len());
-        let mut table = comfy_table::Table::new();
-        table.set_header(vec![
-            "Subnet",
-            "Name",
-            "Hotkey",
-            "Stake (τ)",
-            "Alpha",
-            "Price",
-        ]);
-        for s in &stakes {
-            let di = dynamic_map.get(&s.netuid.0);
-            table.add_row(vec![
-                format!("SN{}", s.netuid.0),
-                di.map(|d| d.name.clone())
-                    .unwrap_or_else(|| "?".to_string()),
-                crate::utils::short_ss58(&s.hotkey),
-                s.stake.display_tao(),
-                format!("{}", s.alpha_stake),
-                di.map(|d| format!("{:.6}", d.price)).unwrap_or_default(),
-            ]);
-        }
-        println!("{table}");
+        // Pair each stake with its dynamic info for render_rows
+        let rows: Vec<_> = stakes
+            .iter()
+            .map(|s| {
+                let di = dynamic_map.get(&s.netuid.0);
+                (
+                    s,
+                    di.map(|d| d.name.clone())
+                        .unwrap_or_else(|| "?".to_string()),
+                    di.map(|d| format!("{:.6}", d.price)).unwrap_or_default(),
+                )
+            })
+            .collect();
+        render_rows(
+            "table",
+            &rows,
+            "",
+            |_| String::new(),
+            &["Subnet", "Name", "Hotkey", "Stake (τ)", "Alpha", "Price"],
+            |(s, name, price)| {
+                vec![
+                    format!("SN{}", s.netuid.0),
+                    name.clone(),
+                    crate::utils::short_ss58(&s.hotkey),
+                    s.stake.display_tao(),
+                    format!("{}", s.alpha_stake),
+                    price.clone(),
+                ]
+            },
+            Some(&format!("\n  Stake Positions ({}):", stakes.len())),
+        );
     } else {
         println!("\n  No active stakes.");
     }
@@ -769,43 +781,46 @@ async fn handle_subnet_analytics(client: &Client, netuid: u16, output: &str) -> 
     }
 
     if !top_miners.is_empty() {
-        println!("\n  Top Miners (by incentive):");
-        let mut table = comfy_table::Table::new();
-        table.set_header(vec!["UID", "Hotkey", "Incentive", "Trust", "Emission"]);
-        for m in top_miners.iter().take(5) {
-            table.add_row(vec![
-                format!("{}", m.uid),
-                crate::utils::short_ss58(&m.hotkey),
-                format!("{:.4}", m.incentive),
-                format!("{:.4}", m.trust),
-                format!("{:.4} τ", m.emission / 1e9),
-            ]);
-        }
-        println!("{table}");
+        let miners_top: Vec<_> = top_miners.into_iter().take(5).collect();
+        render_rows(
+            "table",
+            &miners_top,
+            "",
+            |_| String::new(),
+            &["UID", "Hotkey", "Incentive", "Trust", "Emission"],
+            |m| {
+                vec![
+                    format!("{}", m.uid),
+                    crate::utils::short_ss58(&m.hotkey),
+                    format!("{:.4}", m.incentive),
+                    format!("{:.4}", m.trust),
+                    format!("{:.4} τ", m.emission / 1e9),
+                ]
+            },
+            Some("\n  Top Miners (by incentive):"),
+        );
     }
 
     if !top_vals.is_empty() {
-        println!("\n  Top Validators (by dividends):");
-        let mut table = comfy_table::Table::new();
-        table.set_header(vec![
-            "UID",
-            "Hotkey",
-            "Stake",
-            "VTrust",
-            "Dividends",
-            "Emission",
-        ]);
-        for v in top_vals.iter().take(5) {
-            table.add_row(vec![
-                format!("{}", v.uid),
-                crate::utils::short_ss58(&v.hotkey),
-                format!("{:.4} τ", v.stake.tao()),
-                format!("{:.4}", v.validator_trust),
-                format!("{:.4}", v.dividends),
-                format!("{:.4} τ", v.emission / 1e9),
-            ]);
-        }
-        println!("{table}");
+        let vals_top: Vec<_> = top_vals.into_iter().take(5).collect();
+        render_rows(
+            "table",
+            &vals_top,
+            "",
+            |_| String::new(),
+            &["UID", "Hotkey", "Stake", "VTrust", "Dividends", "Emission"],
+            |v| {
+                vec![
+                    format!("{}", v.uid),
+                    crate::utils::short_ss58(&v.hotkey),
+                    format!("{:.4} τ", v.stake.tao()),
+                    format!("{:.4}", v.validator_trust),
+                    format!("{:.4}", v.dividends),
+                    format!("{:.4} τ", v.emission / 1e9),
+                ]
+            },
+            Some("\n  Top Validators (by dividends):"),
+        );
     }
 
     Ok(())
@@ -1347,49 +1362,69 @@ pub async fn handle_audit(client: &Client, address: &str, output: &str) -> Resul
     }
 
     if !proxies.is_empty() {
-        println!("\n  Proxy Accounts:");
-        let mut table = comfy_table::Table::new();
-        table.set_header(vec!["Delegate", "Type", "Delay"]);
-        for (d, pt, delay) in &proxies {
-            table.add_row(vec![
-                crate::utils::short_ss58(d),
-                pt.clone(),
-                format!("{}", delay),
-            ]);
-        }
-        println!("{table}");
+        render_rows(
+            "table",
+            &proxies,
+            "",
+            |_| String::new(),
+            &["Delegate", "Type", "Delay"],
+            |(d, pt, delay)| {
+                vec![
+                    crate::utils::short_ss58(d),
+                    pt.clone(),
+                    format!("{}", delay),
+                ]
+            },
+            Some("\n  Proxy Accounts:"),
+        );
     }
 
     if !stakes.is_empty() {
-        println!("\n  Stake Exposure:");
-        let mut table = comfy_table::Table::new();
-        table.set_header(vec![
-            "Subnet",
-            "Name",
-            "Hotkey",
-            "Stake (τ)",
-            "% of Total",
-            "Pool Depth (τ)",
-        ]);
-        for s in &stakes {
-            let di = dynamic_map.get(&s.netuid.0);
-            let pct = if total_staked > 0.0 {
-                s.stake.tao() / total_staked * 100.0
-            } else {
-                0.0
-            };
-            table.add_row(vec![
-                format!("SN{}", s.netuid.0),
-                di.map(|d| d.name.clone())
-                    .unwrap_or_else(|| "?".to_string()),
-                crate::utils::short_ss58(&s.hotkey),
-                format!("{:.4}", s.stake.tao()),
-                format!("{:.1}%", pct),
-                di.map(|d| format!("{:.2}", d.tao_in.tao()))
-                    .unwrap_or_else(|| "?".to_string()),
-            ]);
-        }
-        println!("{table}");
+        // Pair each stake with dynamic info for the table
+        let exposure_rows: Vec<_> = stakes
+            .iter()
+            .map(|s| {
+                let di = dynamic_map.get(&s.netuid.0);
+                let pct = if total_staked > 0.0 {
+                    s.stake.tao() / total_staked * 100.0
+                } else {
+                    0.0
+                };
+                (
+                    s,
+                    di.map(|d| d.name.clone())
+                        .unwrap_or_else(|| "?".to_string()),
+                    pct,
+                    di.map(|d| format!("{:.2}", d.tao_in.tao()))
+                        .unwrap_or_else(|| "?".to_string()),
+                )
+            })
+            .collect();
+        render_rows(
+            "table",
+            &exposure_rows,
+            "",
+            |_| String::new(),
+            &[
+                "Subnet",
+                "Name",
+                "Hotkey",
+                "Stake (τ)",
+                "% of Total",
+                "Pool Depth (τ)",
+            ],
+            |(s, name, pct, depth)| {
+                vec![
+                    format!("SN{}", s.netuid.0),
+                    name.clone(),
+                    crate::utils::short_ss58(&s.hotkey),
+                    format!("{:.4}", s.stake.tao()),
+                    format!("{:.1}%", pct),
+                    depth.clone(),
+                ]
+            },
+            Some("\n  Stake Exposure:"),
+        );
     }
 
     if let Some(ref d) = delegate {
@@ -1400,52 +1435,72 @@ pub async fn handle_audit(client: &Client, address: &str, output: &str) -> Resul
     }
 
     // Show childkey delegations
-    let has_children = child_key_results.iter().any(|(_, _, c, _)| !c.is_empty());
-    if has_children {
-        println!("\n  Childkey Delegations:");
-        let mut table = comfy_table::Table::new();
-        table.set_header(vec!["Subnet", "Parent Hotkey", "Child", "Proportion"]);
-        for (hk, nuid, children, _) in &child_key_results {
-            for (proportion, child) in children {
+    let child_rows: Vec<_> = child_key_results
+        .iter()
+        .flat_map(|(hk, nuid, children, _)| {
+            children.iter().map(move |(proportion, child)| {
                 let pct = *proportion as f64 / u64::MAX as f64 * 100.0;
-                table.add_row(vec![
+                (nuid, hk.clone(), child.clone(), pct)
+            })
+        })
+        .collect();
+    if !child_rows.is_empty() {
+        render_rows(
+            "table",
+            &child_rows,
+            "",
+            |_| String::new(),
+            &["Subnet", "Parent Hotkey", "Child", "Proportion"],
+            |(nuid, hk, child, pct)| {
+                vec![
                     format!("SN{}", nuid),
                     crate::utils::short_ss58(hk),
                     crate::utils::short_ss58(child),
                     format!("{:.1}%", pct),
-                ]);
-            }
-        }
-        println!("{table}");
+                ]
+            },
+            Some("\n  Childkey Delegations:"),
+        );
     }
 
     // Show pending childkey changes
-    let has_pending = child_key_results.iter().any(|(_, _, _, p)| p.is_some());
-    if has_pending {
-        println!("\n  Pending Childkey Changes:");
-        let mut table = comfy_table::Table::new();
-        table.set_header(vec![
-            "Subnet",
-            "Parent Hotkey",
-            "New Child",
-            "Proportion",
-            "Cooldown Block",
-        ]);
-        for (hk, nuid, _, pending) in &child_key_results {
-            if let Some((pending_children, cooldown_block)) = pending {
-                for (proportion, child) in pending_children {
-                    let pct = *proportion as f64 / u64::MAX as f64 * 100.0;
-                    table.add_row(vec![
-                        format!("SN{}", nuid),
-                        crate::utils::short_ss58(hk),
-                        crate::utils::short_ss58(child),
-                        format!("{:.1}%", pct),
-                        format!("{}", cooldown_block),
-                    ]);
-                }
-            }
-        }
-        println!("{table}");
+    let pending_rows: Vec<_> = child_key_results
+        .iter()
+        .flat_map(|(hk, nuid, _, pending)| {
+            pending
+                .iter()
+                .flat_map(move |(pending_children, cooldown_block)| {
+                    pending_children.iter().map(move |(proportion, child)| {
+                        let pct = *proportion as f64 / u64::MAX as f64 * 100.0;
+                        (nuid, hk.clone(), child.clone(), pct, *cooldown_block)
+                    })
+                })
+        })
+        .collect();
+    if !pending_rows.is_empty() {
+        render_rows(
+            "table",
+            &pending_rows,
+            "",
+            |_| String::new(),
+            &[
+                "Subnet",
+                "Parent Hotkey",
+                "New Child",
+                "Proportion",
+                "Cooldown Block",
+            ],
+            |(nuid, hk, child, pct, cooldown)| {
+                vec![
+                    format!("SN{}", nuid),
+                    crate::utils::short_ss58(hk),
+                    crate::utils::short_ss58(child),
+                    format!("{:.1}%", pct),
+                    format!("{}", cooldown),
+                ]
+            },
+            Some("\n  Pending Childkey Changes:"),
+        );
     }
 
     if !findings.is_empty() {

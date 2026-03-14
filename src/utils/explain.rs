@@ -25,6 +25,9 @@ pub fn explain(topic: &str) -> Option<&'static str> {
         "governance" | "gov" | "proposals" => Some(GOVERNANCE),
         "senate" | "triumvirate" => Some(SENATE),
         "mevshield" | "mev" | "mevprotection" => Some(MEV_SHIELD),
+        "limits" | "networklimits" | "chainlimits" => Some(LIMITS),
+        "hyperparams" | "hyperparameters" | "params" => Some(HYPERPARAMS),
+        "axon" | "axoninfo" | "serving" => Some(AXON),
         topics => {
             // Fuzzy: check if the topic is a substring of any key
             let all = list_topics();
@@ -63,6 +66,9 @@ pub fn list_topics() -> Vec<(&'static str, &'static str)> {
         ("governance", "On-chain governance and proposals"),
         ("senate", "Senate / triumvirate governance body"),
         ("mev-shield", "MEV protection on Bittensor"),
+        ("limits", "Network and chain operational limits"),
+        ("hyperparams", "Subnet hyperparameters reference"),
+        ("axon", "Axon serving endpoint for miners/validators"),
     ]
 }
 
@@ -620,3 +626,103 @@ For users:
 - Large AMM trades still face slippage from the constant-product formula,
   but won't face additional losses from block producer manipulation.
 - Use limit orders (`agcli stake add-limit`) for additional price protection.";
+
+const LIMITS: &str = "\
+NETWORK & CHAIN LIMITS
+======================
+Bittensor enforces several limits at the chain level that affect miners,
+validators, and stakers.
+
+Weight setting:
+- Minimum 1000 stake-weight to set weights directly (use commit-reveal otherwise).
+- weights_rate_limit: minimum blocks between weight-set calls per validator per subnet.
+- max_weights_limit: maximum number of UIDs that can be included in a single weight vector.
+- min_allowed_weights: minimum UIDs required in a weight vector for it to be valid.
+
+Registration:
+- max_regs_per_block: cap on burn-registrations processed per block network-wide.
+- target_regs_per_interval: target registrations per adjustment_interval, used to
+  auto-adjust the burn cost.
+- Immunity period: newly registered neurons cannot be deregistered for N blocks.
+
+Staking:
+- No minimum stake amount, but very small stakes earn negligible emission.
+- Rate limit on stake/unstake operations may apply during high-traffic periods.
+- Childkey delegation changes have a cooldown period before taking effect.
+
+Serving:
+- serving_rate_limit: minimum blocks between axon metadata updates.
+- Axon IP/port must be publicly reachable for miners to receive queries.
+
+General:
+- Block time: ~12 seconds.
+- Blocks per day: ~7200.
+- Max subnets: determined by governance (currently ~64).
+- Check current limits: `agcli subnet hyperparams <netuid>`";
+
+const HYPERPARAMS: &str = "\
+SUBNET HYPERPARAMETERS
+======================
+Each subnet has a set of hyperparameters that control its behavior. Subnet owners
+can propose changes; some require governance approval.
+
+View them: `agcli subnet hyperparams <netuid>`
+
+Key parameters:
+- rho/kappa: Yuma consensus sensitivity parameters. Higher rho → more aggressive
+  ranking; kappa controls the consensus threshold.
+- tempo: blocks between evaluation rounds (e.g., 360 blocks ≈ 72 min).
+- immunity_period: blocks a new neuron is protected from deregistration.
+- min_allowed_weights / max_weights_limit: bounds on weight vector size.
+- weights_rate_limit: minimum blocks between weight-set calls.
+- weights_version: version key validators must match when setting weights.
+- min_difficulty / max_difficulty: PoW registration difficulty bounds.
+- adjustment_interval / target_regs_per_interval: controls burn auto-adjustment.
+- min_burn / max_burn: floor and ceiling for burn registration cost.
+- bonds_moving_avg: smoothing factor for bond calculations.
+- max_regs_per_block: cap on registrations per block.
+- serving_rate_limit: minimum blocks between axon info updates.
+- max_validators: maximum validators with permits on this subnet.
+- adjustment_alpha: learning rate for difficulty adjustment.
+- commit_reveal_weights_enabled: whether two-phase weight submission is active.
+- commit_reveal_interval: blocks between commit and reveal phases.
+- liquid_alpha_enabled: whether liquid alpha token trading is active.
+
+Changing hyperparams:
+- Subnet owners propose changes via `agcli sudo set --netuid <n> --param <name> --value <v>`.
+- Some params (like tempo, max_validators) may need root governance approval.
+- Changes take effect at the next tempo boundary after being applied.";
+
+const AXON: &str = "\
+AXON (SERVING ENDPOINT)
+=======================
+An axon is the network-facing endpoint that a miner or validator exposes
+so other nodes can communicate with it.
+
+What it stores on-chain:
+- IP address (IPv4 or IPv6)
+- Port number
+- Protocol version
+- Software version
+- Placeholder (reserved field, usually 0)
+
+How it works:
+- Miners call `serve_axon` to register their IP:port on a specific subnet.
+- Validators query on-chain axon info to discover miner endpoints.
+- The serving_rate_limit hyperparameter controls how often axon info can be updated.
+
+Viewing axon info:
+- `agcli subnet metagraph <netuid> --uid <uid>` shows a neuron's axon details.
+- Entries with IP 0.0.0.0 or port 0 indicate a neuron that hasn't set its axon.
+
+For miners:
+- Your axon must be reachable from the public internet.
+- Set it early after registration — validators need it to send queries.
+- Update if your IP changes (subject to serving_rate_limit).
+- Common setup: run your miner behind a reverse proxy or directly with a public IP.
+
+For validators:
+- Axon info helps you verify that miners are actually online.
+- Neurons with stale or missing axon info may be inactive.
+- The `last_update` field in the metagraph shows when the neuron last interacted
+  with the chain (not necessarily axon-specific).";

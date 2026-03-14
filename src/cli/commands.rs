@@ -337,12 +337,12 @@ async fn handle_subnet(
     match cmd {
         SubnetCommands::List => {
             let subnets = crate::queries::subnet::list_subnets(client).await?;
-            if output == "json" {
-                print_json_ser(&subnets);
-            } else if output == "csv" {
-                println!("netuid,name,n,max_n,tempo,emission,burn_rao,owner");
-                for s in &subnets {
-                    println!(
+            render_rows(
+                output,
+                &subnets,
+                "netuid,name,n,max_n,tempo,emission,burn_rao,owner",
+                |s| {
+                    format!(
                         "{},{},{},{},{},{},{},{}",
                         s.netuid,
                         s.name,
@@ -352,17 +352,13 @@ async fn handle_subnet(
                         s.emission_value,
                         s.burn.rao(),
                         s.owner
-                    );
-                }
-            } else if subnets.is_empty() {
-                println!("No subnets found.");
-            } else {
-                let mut table = comfy_table::Table::new();
-                table.set_header(vec![
+                    )
+                },
+                &[
                     "NetUID", "Name", "N", "Max", "Tempo", "Emission", "Burn", "Owner",
-                ]);
-                for s in &subnets {
-                    table.add_row(vec![
+                ],
+                |s| {
+                    vec![
                         format!("{}", s.netuid),
                         s.name.clone(),
                         format!("{}", s.n),
@@ -371,10 +367,10 @@ async fn handle_subnet(
                         format!("{:.4} τ", s.emission_value as f64 / 1e9),
                         s.burn.display_tao(),
                         crate::utils::short_ss58(&s.owner),
-                    ]);
-                }
-                println!("{table}");
-            }
+                    ]
+                },
+                None,
+            );
             Ok(())
         }
         SubnetCommands::Show { netuid } => {
@@ -435,55 +431,75 @@ async fn handle_subnet(
                         print_json_ser(&h);
                         return Ok(());
                     }
-                    println!("Hyperparameters for SN{}", netuid);
-                    let mut table = comfy_table::Table::new();
-                    table.set_header(vec!["Parameter", "Value"]);
-                    let rows: Vec<(&str, String)> = vec![
-                        ("rho", format!("{}", h.rho)),
-                        ("kappa", format!("{}", h.kappa)),
-                        ("immunity_period", format!("{}", h.immunity_period)),
-                        ("min_allowed_weights", format!("{}", h.min_allowed_weights)),
-                        ("max_weights_limit", format!("{}", h.max_weights_limit)),
-                        ("tempo", format!("{}", h.tempo)),
-                        ("min_difficulty", format!("{}", h.min_difficulty)),
-                        ("max_difficulty", format!("{}", h.max_difficulty)),
-                        ("weights_version", format!("{}", h.weights_version)),
-                        ("weights_rate_limit", format!("{}", h.weights_rate_limit)),
-                        ("adjustment_interval", format!("{}", h.adjustment_interval)),
-                        ("activity_cutoff", format!("{}", h.activity_cutoff)),
+                    let rows: Vec<(String, String)> = vec![
+                        ("rho".into(), format!("{}", h.rho)),
+                        ("kappa".into(), format!("{}", h.kappa)),
+                        ("immunity_period".into(), format!("{}", h.immunity_period)),
                         (
-                            "registration_allowed",
+                            "min_allowed_weights".into(),
+                            format!("{}", h.min_allowed_weights),
+                        ),
+                        (
+                            "max_weights_limit".into(),
+                            format!("{}", h.max_weights_limit),
+                        ),
+                        ("tempo".into(), format!("{}", h.tempo)),
+                        ("min_difficulty".into(), format!("{}", h.min_difficulty)),
+                        ("max_difficulty".into(), format!("{}", h.max_difficulty)),
+                        ("weights_version".into(), format!("{}", h.weights_version)),
+                        (
+                            "weights_rate_limit".into(),
+                            format!("{}", h.weights_rate_limit),
+                        ),
+                        (
+                            "adjustment_interval".into(),
+                            format!("{}", h.adjustment_interval),
+                        ),
+                        ("activity_cutoff".into(), format!("{}", h.activity_cutoff)),
+                        (
+                            "registration_allowed".into(),
                             format!("{}", h.registration_allowed),
                         ),
                         (
-                            "target_regs_per_interval",
+                            "target_regs_per_interval".into(),
                             format!("{}", h.target_regs_per_interval),
                         ),
-                        ("min_burn", h.min_burn.display_tao()),
-                        ("max_burn", h.max_burn.display_tao()),
-                        ("bonds_moving_avg", format!("{}", h.bonds_moving_avg)),
-                        ("max_regs_per_block", format!("{}", h.max_regs_per_block)),
-                        ("serving_rate_limit", format!("{}", h.serving_rate_limit)),
-                        ("max_validators", format!("{}", h.max_validators)),
-                        ("adjustment_alpha", format!("{}", h.adjustment_alpha)),
-                        ("difficulty", format!("{}", h.difficulty)),
+                        ("min_burn".into(), h.min_burn.display_tao()),
+                        ("max_burn".into(), h.max_burn.display_tao()),
+                        ("bonds_moving_avg".into(), format!("{}", h.bonds_moving_avg)),
                         (
-                            "commit_reveal_weights",
+                            "max_regs_per_block".into(),
+                            format!("{}", h.max_regs_per_block),
+                        ),
+                        (
+                            "serving_rate_limit".into(),
+                            format!("{}", h.serving_rate_limit),
+                        ),
+                        ("max_validators".into(), format!("{}", h.max_validators)),
+                        ("adjustment_alpha".into(), format!("{}", h.adjustment_alpha)),
+                        ("difficulty".into(), format!("{}", h.difficulty)),
+                        (
+                            "commit_reveal_weights".into(),
                             format!("{}", h.commit_reveal_weights_enabled),
                         ),
                         (
-                            "commit_reveal_interval",
+                            "commit_reveal_interval".into(),
                             format!("{}", h.commit_reveal_weights_interval),
                         ),
                         (
-                            "liquid_alpha_enabled",
+                            "liquid_alpha_enabled".into(),
                             format!("{}", h.liquid_alpha_enabled),
                         ),
                     ];
-                    for (k, v) in &rows {
-                        table.add_row(vec![k, v.as_str()]);
-                    }
-                    println!("{table}");
+                    render_rows(
+                        "table",
+                        &rows,
+                        "",
+                        |_| String::new(),
+                        &["Parameter", "Value"],
+                        |r| vec![r.0.clone(), r.1.clone()],
+                        Some(&format!("Hyperparameters for SN{}", netuid)),
+                    );
                 }
                 None => println!("Hyperparameters not found for SN{}.", netuid),
             }
@@ -537,46 +553,21 @@ async fn handle_subnet(
                 return crate::live::live_metagraph(client, netuid.into(), interval).await;
             }
             let mg = crate::queries::fetch_metagraph(client, netuid.into()).await?;
-            if output == "json" {
-                print_json_ser(&mg);
-            } else if output == "csv" {
-                println!("uid,hotkey,coldkey,stake_rao,rank,trust,consensus,incentive,dividends,emission,validator_permit,last_update");
-                for n in &mg.neurons {
-                    println!(
+            render_rows(
+                output,
+                &mg.neurons,
+                "uid,hotkey,coldkey,stake_rao,rank,trust,consensus,incentive,dividends,emission,validator_permit,last_update",
+                |n| {
+                    format!(
                         "{},{},{},{},{:.6},{:.6},{:.6},{:.6},{:.6},{:.0},{},{}",
-                        n.uid,
-                        n.hotkey,
-                        n.coldkey,
-                        n.stake.rao(),
-                        n.rank,
-                        n.trust,
-                        n.consensus,
-                        n.incentive,
-                        n.dividends,
-                        n.emission,
-                        n.validator_permit,
-                        n.last_update
-                    );
-                }
-            } else {
-                println!(
-                    "Metagraph SN{} — {} neurons, block {}",
-                    netuid, mg.n, mg.block
-                );
-                let mut table = comfy_table::Table::new();
-                table.set_header(vec![
-                    "UID",
-                    "Hotkey",
-                    "Stake",
-                    "Rank",
-                    "Trust",
-                    "Incentive",
-                    "Emission",
-                    "Updated",
-                    "VP",
-                ]);
-                for n in &mg.neurons {
-                    table.add_row(vec![
+                        n.uid, n.hotkey, n.coldkey, n.stake.rao(), n.rank, n.trust,
+                        n.consensus, n.incentive, n.dividends, n.emission,
+                        n.validator_permit, n.last_update
+                    )
+                },
+                &["UID", "Hotkey", "Stake", "Rank", "Trust", "Incentive", "Emission", "Updated", "VP"],
+                |n| {
+                    vec![
                         format!("{}", n.uid),
                         crate::utils::short_ss58(&n.hotkey),
                         format!("{:.4}τ", n.stake.tao()),
@@ -586,10 +577,10 @@ async fn handle_subnet(
                         format!("{:.4} τ", n.emission / 1e9),
                         format!("{}", n.last_update),
                         if n.validator_permit { "Y" } else { "" }.to_string(),
-                    ]);
-                }
-                println!("{table}");
-            }
+                    ]
+                },
+                Some(&format!("Metagraph SN{} — {} neurons, block {}", netuid, mg.n, mg.block)),
+            );
             Ok(())
         }
         SubnetCommands::Register => {
@@ -1236,35 +1227,39 @@ async fn handle_subnet_health(client: &Client, netuid: u16, output: &str) -> Res
         println!("  Rate limit:    {} blocks", h.weights_rate_limit);
     }
 
-    println!("\n  All Neurons:");
-    let mut table = comfy_table::Table::new();
-    table.set_header(vec![
-        "UID",
-        "Hotkey",
-        "Active",
-        "Stake",
-        "Incentive",
-        "Emission",
-        "Trust",
-        "Updated",
-        "VP",
-    ]);
-    for n in &neurons {
-        let staleness = block.saturating_sub(n.last_update);
-        let stale_mark = if staleness > 1000 { " !" } else { "" };
-        table.add_row(vec![
-            format!("{}", n.uid),
-            crate::utils::short_ss58(&n.hotkey),
-            if n.active { "Y" } else { "N" }.to_string(),
-            format!("{:.4}τ", n.stake.tao()),
-            format!("{:.4}", n.incentive),
-            format!("{:.4} τ", n.emission / 1e9),
-            format!("{:.4}", n.trust),
-            format!("{}{}", staleness, stale_mark),
-            if n.validator_permit { "V" } else { "M" }.to_string(),
-        ]);
-    }
-    println!("{table}");
+    render_rows(
+        "table",
+        &neurons,
+        "",
+        |_| String::new(),
+        &[
+            "UID",
+            "Hotkey",
+            "Active",
+            "Stake",
+            "Incentive",
+            "Emission",
+            "Trust",
+            "Updated",
+            "VP",
+        ],
+        |n| {
+            let staleness = block.saturating_sub(n.last_update);
+            let stale_mark = if staleness > 1000 { " !" } else { "" };
+            vec![
+                format!("{}", n.uid),
+                crate::utils::short_ss58(&n.hotkey),
+                if n.active { "Y" } else { "N" }.to_string(),
+                format!("{:.4}τ", n.stake.tao()),
+                format!("{:.4}", n.incentive),
+                format!("{:.4} τ", n.emission / 1e9),
+                format!("{:.4}", n.trust),
+                format!("{}{}", staleness, stale_mark),
+                if n.validator_permit { "V" } else { "M" }.to_string(),
+            ]
+        },
+        Some("\n  All Neurons:"),
+    );
     Ok(())
 }
 
@@ -1779,35 +1774,33 @@ async fn handle_delegate(
     match cmd {
         DelegateCommands::List => {
             let delegates = client.get_delegates().await?;
-            if output == "json" {
-                print_json_ser(&delegates);
-            } else if output == "csv" {
-                println!("hotkey,owner,take_pct,total_stake_rao,nominators");
-                for d in &delegates {
-                    println!(
+            let top: Vec<_> = delegates.into_iter().take(50).collect();
+            render_rows(
+                output,
+                &top,
+                "hotkey,owner,take_pct,total_stake_rao,nominators",
+                |d| {
+                    format!(
                         "{},{},{:.4},{},{}",
                         d.hotkey,
                         d.owner,
                         d.take * 100.0,
                         d.total_stake.rao(),
                         d.nominators.len()
-                    );
-                }
-            } else {
-                println!("{} delegates", delegates.len());
-                let mut table = comfy_table::Table::new();
-                table.set_header(vec!["Hotkey", "Owner", "Take", "Total Stake", "Nominators"]);
-                for d in delegates.iter().take(50) {
-                    table.add_row(vec![
+                    )
+                },
+                &["Hotkey", "Owner", "Take", "Total Stake", "Nominators"],
+                |d| {
+                    vec![
                         crate::utils::short_ss58(&d.hotkey),
                         crate::utils::short_ss58(&d.owner),
                         format!("{:.2}%", d.take * 100.0),
                         d.total_stake.display_tao(),
                         format!("{}", d.nominators.len()),
-                    ]);
-                }
-                println!("{table}");
-            }
+                    ]
+                },
+                Some(&format!("{} delegates", top.len())),
+            );
             Ok(())
         }
         DelegateCommands::Show { hotkey } => {
@@ -2354,23 +2347,25 @@ async fn handle_proxy(
                     serde_json::json!({"delegate": d, "proxy_type": t, "delay": delay})
                 }).collect();
                 print_json_ser(&json);
-            } else if proxies.is_empty() {
-                println!(
-                    "No proxy accounts found for {}",
-                    crate::utils::short_ss58(&addr)
-                );
             } else {
-                println!("Proxy accounts for {}:", crate::utils::short_ss58(&addr));
-                let mut table = comfy_table::Table::new();
-                table.set_header(vec!["Delegate", "Type", "Delay"]);
-                for (delegate, proxy_type, delay) in &proxies {
-                    table.add_row(vec![
-                        crate::utils::short_ss58(delegate),
-                        proxy_type.clone(),
-                        format!("{}", delay),
-                    ]);
-                }
-                println!("{table}");
+                render_rows(
+                    "table",
+                    &proxies,
+                    "",
+                    |_| String::new(),
+                    &["Delegate", "Type", "Delay"],
+                    |(delegate, proxy_type, delay)| {
+                        vec![
+                            crate::utils::short_ss58(delegate),
+                            proxy_type.clone(),
+                            format!("{}", delay),
+                        ]
+                    },
+                    Some(&format!(
+                        "Proxy accounts for {}:",
+                        crate::utils::short_ss58(&addr)
+                    )),
+                );
             }
             Ok(())
         }
