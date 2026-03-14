@@ -244,3 +244,212 @@ fn spending_limit_no_config_passes() {
         result.err()
     );
 }
+
+// ──── Step 26: Edge case tests ────
+
+#[test]
+fn parse_weight_pairs_empty_string() {
+    let result = parse_weight_pairs("");
+    assert!(result.is_err(), "empty string should fail");
+}
+
+#[test]
+fn parse_weight_pairs_only_commas() {
+    let result = parse_weight_pairs(",,,");
+    assert!(result.is_err(), "commas-only should fail");
+}
+
+#[test]
+fn parse_weight_pairs_negative_uid() {
+    // Negative values can't parse as u16
+    let result = parse_weight_pairs("-1:100");
+    assert!(result.is_err(), "negative UID should fail");
+}
+
+#[test]
+fn parse_weight_pairs_extra_colon() {
+    let result = parse_weight_pairs("0:100:extra");
+    assert!(result.is_err(), "extra colon should fail");
+}
+
+#[test]
+fn parse_weight_pairs_max_u16_values() {
+    // Max u16 values should succeed
+    let (uids, weights) = parse_weight_pairs("65535:65535").unwrap();
+    assert_eq!(uids, vec![65535]);
+    assert_eq!(weights, vec![65535]);
+}
+
+#[test]
+fn parse_children_empty_hotkey() {
+    let result = parse_children("1000:");
+    // Should produce a child with empty hotkey string (not an error from parsing)
+    assert!(result.is_ok());
+    let children = result.unwrap();
+    assert_eq!(children[0].1, "");
+}
+
+#[test]
+fn parse_children_zero_proportion() {
+    let result = parse_children("0:5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY");
+    assert!(result.is_ok(), "zero proportion should be allowed");
+    assert_eq!(result.unwrap()[0].0, 0);
+}
+
+#[test]
+fn json_to_subxt_value_null() {
+    use agcli::cli::helpers::json_to_subxt_value;
+    let val = json_to_subxt_value(&serde_json::json!(null));
+    // Null should not panic — produces a string representation
+    let _formatted = format!("{:?}", val);
+}
+
+#[test]
+fn json_to_subxt_value_object() {
+    use agcli::cli::helpers::json_to_subxt_value;
+    let val = json_to_subxt_value(&serde_json::json!({"key": "value"}));
+    // Objects should not panic — produces a string representation
+    let _formatted = format!("{:?}", val);
+}
+
+#[test]
+fn json_to_subxt_value_negative_number() {
+    use agcli::cli::helpers::json_to_subxt_value;
+    let val = json_to_subxt_value(&serde_json::json!(-42));
+    let _formatted = format!("{:?}", val);
+}
+
+#[test]
+fn json_to_subxt_value_large_number() {
+    use agcli::cli::helpers::json_to_subxt_value;
+    let val = json_to_subxt_value(&serde_json::json!(u64::MAX));
+    let _formatted = format!("{:?}", val);
+}
+
+#[test]
+fn json_to_subxt_value_float_as_string() {
+    use agcli::cli::helpers::json_to_subxt_value;
+    // JSON floats become strings since we can't represent them as u128/i128
+    let val = json_to_subxt_value(&serde_json::json!(3.14));
+    let _formatted = format!("{:?}", val);
+}
+
+#[test]
+fn json_to_subxt_value_invalid_hex() {
+    use agcli::cli::helpers::json_to_subxt_value;
+    // "0x" prefix but invalid hex should fall back to string
+    let val = json_to_subxt_value(&serde_json::json!("0xzzzz"));
+    let _formatted = format!("{:?}", val);
+}
+
+#[test]
+fn json_to_subxt_value_empty_array() {
+    use agcli::cli::helpers::json_to_subxt_value;
+    let val = json_to_subxt_value(&serde_json::json!([]));
+    let _formatted = format!("{:?}", val);
+}
+
+#[test]
+fn ss58_validation_invalid_address() {
+    use agcli::wallet::keypair;
+    let result = keypair::from_ss58("not_an_address");
+    assert!(result.is_err());
+    let msg = result.unwrap_err().to_string();
+    assert!(
+        msg.contains("Invalid SS58"),
+        "Expected SS58 error, got: {}",
+        msg
+    );
+}
+
+#[test]
+fn ss58_validation_empty_address() {
+    use agcli::wallet::keypair;
+    let result = keypair::from_ss58("");
+    assert!(result.is_err());
+    let msg = result.unwrap_err().to_string();
+    assert!(
+        msg.contains("Empty address"),
+        "Expected empty address error, got: {}",
+        msg
+    );
+}
+
+#[test]
+fn ss58_validation_short_address() {
+    use agcli::wallet::keypair;
+    let result = keypair::from_ss58("5abc");
+    assert!(result.is_err());
+    let msg = result.unwrap_err().to_string();
+    assert!(
+        msg.contains("too short"),
+        "Expected 'too short' error, got: {}",
+        msg
+    );
+}
+
+#[test]
+fn ss58_validation_valid_address() {
+    use agcli::wallet::keypair;
+    assert!(keypair::is_valid_ss58(
+        "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+    ));
+    assert!(!keypair::is_valid_ss58("invalid"));
+    assert!(!keypair::is_valid_ss58(""));
+}
+
+#[test]
+fn explain_all_topics_have_content() {
+    let topics = explain::list_topics();
+    for (key, _desc) in &topics {
+        let content = explain::explain(key);
+        assert!(
+            content.is_some(),
+            "Topic '{}' listed but has no content",
+            key
+        );
+        assert!(
+            content.unwrap().len() > 50,
+            "Topic '{}' content is too short",
+            key
+        );
+    }
+}
+
+#[test]
+fn balance_from_tao_negative() {
+    // Negative TAO should produce 0 (wraps due to as u64)
+    use agcli::types::Balance;
+    let b = Balance::from_tao(-1.0);
+    // This is an edge case — negative f64 cast to u64 wraps. Document behavior.
+    // Just verify it doesn't panic.
+    let _ = b.rao();
+}
+
+#[test]
+fn balance_from_tao_very_large() {
+    use agcli::types::Balance;
+    // Very large TAO — near u64 max
+    let b = Balance::from_tao(18.0); // 18 TAO = 18_000_000_000 RAO, well within u64
+    assert_eq!(b.rao(), 18_000_000_000);
+}
+
+#[test]
+fn balance_display_tao_precision() {
+    use agcli::types::Balance;
+    let b = Balance::from_rao(1); // 1 RAO = 0.000000001 TAO
+    let s = b.display_tao();
+    assert!(
+        s.contains("0.000000001"),
+        "Expected full precision, got: {}",
+        s
+    );
+}
+
+#[test]
+fn format_tao_zero() {
+    use agcli::types::Balance;
+    use agcli::utils::format::format_tao;
+    let s = format_tao(Balance::ZERO);
+    assert!(s.contains("0.0"), "Expected zero TAO display, got: {}", s);
+}

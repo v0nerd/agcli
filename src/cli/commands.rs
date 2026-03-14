@@ -2001,9 +2001,7 @@ async fn handle_subscribe(
 ) -> Result<()> {
     let json = output == "json";
     match cmd {
-        SubscribeCommands::Blocks => {
-            crate::events::subscribe_blocks(client.inner_client(), json).await
-        }
+        SubscribeCommands::Blocks => crate::events::subscribe_blocks(client.subxt(), json).await,
         SubscribeCommands::Events {
             filter,
             netuid,
@@ -2011,7 +2009,7 @@ async fn handle_subscribe(
         } => {
             let f: crate::events::EventFilter = filter.parse().unwrap();
             crate::events::subscribe_events_filtered(
-                client.inner_client(),
+                client.subxt(),
                 f,
                 json,
                 netuid,
@@ -2572,7 +2570,7 @@ async fn handle_batch(
         let fields: Vec<subxt::dynamic::Value> = args.iter().map(json_to_subxt_value).collect();
 
         let tx = subxt::dynamic::tx(pallet, call_name, fields);
-        let encoded = client.inner_client().tx().call_data(&tx).map_err(|e| {
+        let encoded = client.subxt().tx().call_data(&tx).map_err(|e| {
             anyhow::anyhow!(
                 "Call #{} ({}.{}): encoding failed: {}",
                 i,

@@ -839,10 +839,7 @@ impl Client {
 
     // ──────── Block Subscription ────────
 
-    /// Get the underlying subxt client for subscriptions.
-    pub fn inner_client(&self) -> &OnlineClient<SubtensorConfig> {
-        &self.inner
-    }
+    // inner_client() removed — use subxt() instead
 
     // ──────── Proxy Support ────────
 
