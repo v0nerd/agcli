@@ -83,6 +83,29 @@ Check commit status for your hotkey on a subnet.
 agcli weights status --netuid 1
 ```
 
+## Advanced: Mechanism Weights
+Subnets can have multiple mechanisms (indexed by MechId). Each mechanism has its own weight matrix. The storage index is `netuid * MAX_MECHANISMS + mecid`.
+
+On-chain extrinsics:
+- `set_mechanism_weights(origin, netuid, mecid, dests, weights, version_key)`
+- `commit_mechanism_weights(origin, netuid, mecid, commit_hash)`
+- `reveal_mechanism_weights(origin, netuid, mecid, uids, values, salt, version_key)`
+
+## Advanced: Timelocked Weights (Drand)
+Weights can be committed with drand-based timelock encryption — auto-decrypted when the specified drand round arrives, without requiring a reveal transaction.
+
+On-chain: `commit_timelocked_weights(origin, netuid, commit, reveal_round, commit_reveal_version)`
+- Events: `TimelockedWeightsCommitted(account, netuid, hash, reveal_round)`
+- Storage: `TimelockedWeightCommits`
+
+## Advanced: Batch Weight Operations
+Set/commit/reveal weights across multiple subnets in a single extrinsic:
+- `batch_set_weights(origin, netuids, weights, version_keys)`
+- `batch_commit_weights(origin, netuids, commit_hashes)`
+- `batch_reveal_weights(origin, netuid, uids_list, values_list, salts_list, version_keys)`
+
+Events: `BatchWeightsCompleted`, `BatchCompletedWithErrors`, `BatchWeightItemFailed`
+
 ## Weight Format
 Weights are comma-separated `uid:weight` pairs where:
 - `uid` = neuron UID (u16, must exist in metagraph)

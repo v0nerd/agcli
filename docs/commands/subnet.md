@@ -124,16 +124,17 @@ agcli subnet mechanism-count --netuid 1
 ## Extrinsic Subcommands (Write Operations)
 
 ### subnet register
-Create a new subnet. Burns the current subnet registration cost.
+Create a new subnet. Burns the current subnet registration cost (lock cost).
 
 ```bash
 agcli subnet register [--password PW] [--yes]
 ```
 
-**On-chain**: `SubtensorModule::register_network(origin, hotkey)`
-- Events: `NetworkAdded(netuid, uid)`
-- Errors: `SubnetLimitReached`, `NotEnoughBalanceToStake`
-- Note: Registration cost increases with each new subnet
+**On-chain**: `SubtensorModule::register_network(origin, hotkey)` or `register_network_with_identity(origin, hotkey, identity)`
+- Storage writes: `SubnetMechanism`, `NetworkRegisteredAt`, `TokenSymbol`, `SubnetTAO`, `SubnetAlphaIn`, `SubnetOwner`, `SubnetOwnerHotkey`, `SubnetLocked`, `SubnetworkN`, `NetworksAdded`, `Tempo`, `TotalNetworks` + all hyperparam defaults
+- Events: `NetworkAdded(netuid, mechid)`, optionally `SubnetIdentitySet(netuid)`
+- Errors: `SubnetLimitReached`, `CannotAffordLockCost`, `BalanceWithdrawalError`, `NetworkTxRateLimitExceeded`
+- Note: Registration cost increases with each new subnet; requires `StartCallDelay` blocks before emissions begin
 
 ### subnet register-neuron
 Register a neuron on an existing subnet (burn registration).
