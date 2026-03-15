@@ -389,6 +389,28 @@ pub async fn handle_stake(
             println!("Auto-stake set. Tx: {}", hash);
             Ok(())
         }
+        StakeCommands::ShowAuto { address } => {
+            let addr = resolve_coldkey_address(address, wallet_dir, wallet_name);
+            let subnets = client.get_all_subnets().await?;
+            let mut found = false;
+            for subnet in subnets.iter() {
+                match client.get_auto_stake_hotkey(&addr, subnet.netuid).await {
+                    Ok(Some(hotkey)) => {
+                        if !found {
+                            println!("Auto-stake destinations for {}:", crate::utils::short_ss58(&addr));
+                            found = true;
+                        }
+                        println!("  SN{:<4} → {}", subnet.netuid, crate::utils::short_ss58(&hotkey));
+                    }
+                    Ok(None) => {} // No auto-stake set for this subnet
+                    Err(_) => {}   // Storage key may not exist
+                }
+            }
+            if !found {
+                println!("No auto-stake destinations set for {}", crate::utils::short_ss58(&addr));
+            }
+            Ok(())
+        }
         StakeCommands::SetClaim {
             claim_type,
             subnets,

@@ -607,6 +607,170 @@ impl Client {
             .await?;
         Ok((result.tao_amount, result.tao_fee, result.alpha_fee))
     }
+
+    // ──────── Auto-Stake Queries ────────
+
+    /// Get auto-stake hotkey for a coldkey on a subnet.
+    /// Returns the hotkey SS58 if set, or None.
+    pub async fn get_auto_stake_hotkey(
+        &self,
+        coldkey_ss58: &str,
+        netuid: NetUid,
+    ) -> Result<Option<String>> {
+        let coldkey_id = Self::ss58_to_account_id(coldkey_ss58)?;
+        let addr = subxt::dynamic::storage(
+            "SubtensorModule",
+            "AutoStakeHotkeys",
+            vec![
+                subxt::dynamic::Value::from_bytes(coldkey_id.0),
+                subxt::dynamic::Value::u128(netuid.0 as u128),
+            ],
+        );
+        let result = self.inner.storage().at_latest().await?.fetch(&addr).await?;
+        match result {
+            Some(val) => {
+                let account_bytes: [u8; 32] = val.as_type()?;
+                let account = crate::AccountId::from(account_bytes);
+                Ok(Some(account.to_string()))
+            }
+            None => Ok(None),
+        }
+    }
+
+    // ──────── Emission Split Queries ────────
+
+    /// Get mechanism emission split for a subnet (if set).
+    pub async fn get_emission_split(
+        &self,
+        netuid: NetUid,
+    ) -> Result<Option<Vec<(String, u64)>>> {
+        let addr = subxt::dynamic::storage(
+            "SubtensorModule",
+            "MechanismEmissionSplit",
+            vec![subxt::dynamic::Value::u128(netuid.0 as u128)],
+        );
+        let result = self.inner.storage().at_latest().await?.fetch(&addr).await?;
+        match result {
+            Some(val) => {
+                let raw: Vec<(u8, u64)> = val.as_type()?;
+                let splits: Vec<(String, u64)> = raw
+                    .into_iter()
+                    .map(|(k, v)| {
+                        let name = match k {
+                            0 => "Yuma".to_string(),
+                            1 => "Oracle".to_string(),
+                            _ => format!("Unknown({})", k),
+                        };
+                        (name, v)
+                    })
+                    .collect();
+                Ok(Some(splits))
+            }
+            None => Ok(None),
+        }
+    }
+
+    // ──────── Crowdloan Queries ────────
+
+    /// List all crowdloans by iterating Crowdloan storage.
+    /// Returns Vec<(id, creator_ss58, deposit, raised, cap, end_block, finalized)>.
+    pub async fn list_crowdloans(
+        &self,
+    ) -> Result<Vec<(u32, String, u64, u64, u64, u32, bool)>> {
+        let addr = subxt::dynamic::storage("Crowdloan", "Crowdloans", ());
+        let mut results = Vec::new();
+        let mut iter = self
+            .inner
+            .storage()
+            .at_latest()
+            .await?
+            .iter(addr)
+            .await?;
+        while let Some(Ok(kv)) = iter.next().await {
+            // Extract crowdloan ID from key (last 4 bytes for u32)
+            let key_bytes = &kv.key_bytes;
+            if key_bytes.len() >= 4 {
+                let id_bytes: [u8; 4] = key_bytes[key_bytes.len() - 4..]
+                    .try_into()
+                    .unwrap_or([0u8; 4]);
+                let id = u32::from_le_bytes(id_bytes);
+
+                // Try to decode the value
+                if let Ok((creator_bytes, deposit, raised, cap, end_block, _min_contrib, finalized, _target, _call))
+                    = kv.value.as_type::<([u8; 32], u64, u64, u64, u32, u64, bool, Option<[u8; 32]>, Option<Vec<u8>>)>()
+                {
+                    let creator = crate::AccountId::from(creator_bytes).to_string();
+                    results.push((id, creator, deposit, raised, cap, end_block, finalized));
+                }
+            }
+        }
+        results.sort_by_key(|(id, _, _, _, _, _, _)| *id);
+        Ok(results)
+    }
+
+    /// Get detailed info for a specific crowdloan.
+    /// Returns (creator, deposit, raised, cap, end_block, min_contribution, finalized, target).
+    pub async fn get_crowdloan_info(
+        &self,
+        crowdloan_id: u32,
+    ) -> Result<Option<(String, u64, u64, u64, u32, u64, bool, Option<String>)>> {
+        let addr = subxt::dynamic::storage(
+            "Crowdloan",
+            "Crowdloans",
+            vec![subxt::dynamic::Value::u128(crowdloan_id as u128)],
+        );
+        let result = self.inner.storage().at_latest().await?.fetch(&addr).await?;
+        match result {
+            Some(val) => {
+                if let Ok((creator_bytes, deposit, raised, cap, end_block, min_contrib, finalized, target_opt, _call))
+                    = val.as_type::<([u8; 32], u64, u64, u64, u32, u64, bool, Option<[u8; 32]>, Option<Vec<u8>>)>()
+                {
+                    let creator = crate::AccountId::from(creator_bytes).to_string();
+                    let target = target_opt.map(|t| crate::AccountId::from(t).to_string());
+                    Ok(Some((creator, deposit, raised, cap, end_block, min_contrib, finalized, target)))
+                } else {
+                    Ok(None)
+                }
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// Get contributors for a specific crowdloan.
+    /// Returns Vec<(address, amount_rao)>.
+    pub async fn get_crowdloan_contributors(
+        &self,
+        crowdloan_id: u32,
+    ) -> Result<Vec<(String, u64)>> {
+        let addr = subxt::dynamic::storage(
+            "Crowdloan",
+            "Contributors",
+            vec![subxt::dynamic::Value::u128(crowdloan_id as u128)],
+        );
+        let mut results = Vec::new();
+        let mut iter = self
+            .inner
+            .storage()
+            .at_latest()
+            .await?
+            .iter(addr)
+            .await?;
+        while let Some(Ok(kv)) = iter.next().await {
+            let key_bytes = &kv.key_bytes;
+            if key_bytes.len() >= 32 {
+                let account_bytes: [u8; 32] = key_bytes[key_bytes.len() - 32..]
+                    .try_into()
+                    .unwrap_or([0u8; 32]);
+                let account = crate::AccountId::from(account_bytes).to_string();
+                if let Ok(amount) = kv.value.as_type::<u64>() {
+                    results.push((account, amount));
+                }
+            }
+        }
+        results.sort_by(|a, b| b.1.cmp(&a.1)); // Sort by amount descending
+        Ok(results)
+    }
+
 }
 
 /// Convert a Registry pallet `IdentityInfo` into our `ChainIdentity` struct.

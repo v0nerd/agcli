@@ -544,6 +544,42 @@ pub(super) async fn handle_proxy(
             );
             Ok(())
         }
+        ProxyCommands::CreatePure {
+            proxy_type,
+            delay,
+            index,
+        } => {
+            let mut wallet = open_wallet(wallet_dir, wallet_name)?;
+            unlock_coldkey(&mut wallet, password)?;
+            println!(
+                "Creating pure proxy (type={}, delay={}, index={})",
+                proxy_type, delay, index
+            );
+            let hash = client
+                .create_pure_proxy(wallet.coldkey()?, &proxy_type, delay, index)
+                .await?;
+            println!("Pure proxy created. Tx: {}", hash);
+            println!("Check proxy list to find the new pure proxy address.");
+            Ok(())
+        }
+        ProxyCommands::KillPure {
+            spawner,
+            proxy_type,
+            index,
+            height,
+            ext_index,
+        } => {
+            let mut wallet = open_wallet(wallet_dir, wallet_name)?;
+            unlock_coldkey(&mut wallet, password)?;
+            println!(
+                "WARNING: Killing pure proxy will make all funds in it permanently inaccessible!"
+            );
+            let hash = client
+                .kill_pure_proxy(wallet.coldkey()?, &spawner, &proxy_type, index, height, ext_index)
+                .await?;
+            println!("Pure proxy killed. Tx: {}", hash);
+            Ok(())
+        }
         ProxyCommands::List { address } => {
             let addr = resolve_coldkey_address(address, wallet_dir, wallet_name);
             let proxies = client.list_proxies(&addr).await?;
@@ -587,6 +623,109 @@ pub(super) async fn handle_crowdloan(
     _output: &str,
     password: Option<&str>,
 ) -> Result<()> {
+    // Read-only query commands (no wallet needed)
+    match &cmd {
+        CrowdloanCommands::List => {
+            let crowdloans = client.list_crowdloans().await?;
+            if crowdloans.is_empty() {
+                println!("No crowdloans found.");
+            } else {
+                render_rows(
+                    _output,
+                    &crowdloans,
+                    "id,creator,deposit,raised,cap,end_block,finalized",
+                    |(id, creator, deposit, raised, cap, end_block, finalized)| {
+                        format!(
+                            "{},{},{},{},{},{},{}",
+                            id,
+                            creator,
+                            Balance::from_rao(*deposit).display_tao(),
+                            Balance::from_rao(*raised).display_tao(),
+                            Balance::from_rao(*cap).display_tao(),
+                            end_block,
+                            finalized,
+                        )
+                    },
+                    &["ID", "Creator", "Deposit", "Raised", "Cap", "End Block", "Done"],
+                    |(id, creator, deposit, raised, cap, end_block, finalized)| {
+                        vec![
+                            format!("{}", id),
+                            crate::utils::short_ss58(creator),
+                            Balance::from_rao(*deposit).display_tao(),
+                            Balance::from_rao(*raised).display_tao(),
+                            Balance::from_rao(*cap).display_tao(),
+                            format!("{}", end_block),
+                            if *finalized { "Yes" } else { "No" }.to_string(),
+                        ]
+                    },
+                    Some(&format!("{} crowdloans", crowdloans.len())),
+                );
+            }
+            return Ok(());
+        }
+        CrowdloanCommands::Info { crowdloan_id } => {
+            let info = client.get_crowdloan_info(*crowdloan_id).await?;
+            match info {
+                Some((creator, deposit, raised, cap, end_block, min_contrib, finalized, target)) => {
+                    println!("Crowdloan #{}", crowdloan_id);
+                    println!("  Creator:          {}", creator);
+                    println!("  Deposit:          {}", Balance::from_rao(deposit).display_tao());
+                    println!("  Raised:           {}", Balance::from_rao(raised).display_tao());
+                    println!("  Cap:              {}", Balance::from_rao(cap).display_tao());
+                    println!("  Progress:         {:.1}%", if cap > 0 { raised as f64 / cap as f64 * 100.0 } else { 0.0 });
+                    println!("  End block:        {}", end_block);
+                    println!("  Min contribution: {}", Balance::from_rao(min_contrib).display_tao());
+                    println!("  Finalized:        {}", if finalized { "Yes" } else { "No" });
+                    if let Some(t) = target {
+                        println!("  Target address:   {}", t);
+                    }
+                }
+                None => println!("Crowdloan #{} not found.", crowdloan_id),
+            }
+            return Ok(());
+        }
+        CrowdloanCommands::Contributors { crowdloan_id } => {
+            let contributors = client.get_crowdloan_contributors(*crowdloan_id).await?;
+            if contributors.is_empty() {
+                println!("No contributors for crowdloan #{}.", crowdloan_id);
+            } else {
+                let total: u64 = contributors.iter().map(|(_, amount)| amount).sum();
+                render_rows(
+                    _output,
+                    &contributors,
+                    "address,amount_rao,pct",
+                    |(addr, amount)| {
+                        format!(
+                            "{},{},{:.2}",
+                            addr,
+                            amount,
+                            if total > 0 { *amount as f64 / total as f64 * 100.0 } else { 0.0 },
+                        )
+                    },
+                    &["Address", "Amount", "%"],
+                    |(addr, amount)| {
+                        vec![
+                            crate::utils::short_ss58(addr),
+                            Balance::from_rao(*amount).display_tao(),
+                            format!(
+                                "{:.1}%",
+                                if total > 0 { *amount as f64 / total as f64 * 100.0 } else { 0.0 }
+                            ),
+                        ]
+                    },
+                    Some(&format!(
+                        "{} contributors, total {}",
+                        contributors.len(),
+                        Balance::from_rao(total).display_tao()
+                    )),
+                );
+            }
+            return Ok(());
+        }
+        _ => {} // Fall through to write commands that need wallet
+    }
+
+    // Write commands need wallet
     let mut wallet = open_wallet(wallet_dir, wallet_name)?;
     unlock_coldkey(&mut wallet, password)?;
     let pair = wallet.coldkey()?;
@@ -711,6 +850,10 @@ pub(super) async fn handle_crowdloan(
                     .await?,
             )
         }
+        // Read-only variants already handled above
+        CrowdloanCommands::List
+        | CrowdloanCommands::Info { .. }
+        | CrowdloanCommands::Contributors { .. } => unreachable!(),
     };
     println!("{}. Tx: {}", action, hash);
     Ok(())

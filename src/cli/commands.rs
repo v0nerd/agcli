@@ -30,6 +30,49 @@ pub async fn execute(cli: Cli) -> Result<()> {
     set_pretty_mode(pretty);
 
     match cli.command {
+        Commands::Wallet(WalletCommands::AssociateHotkey { hotkey }) => {
+            let client = connect(&network, dry_run).await?;
+            let (pair, hk) = unlock_and_resolve(
+                &cli.wallet_dir, &cli.wallet, &cli.hotkey,
+                hotkey, password.as_deref(),
+            )?;
+            println!("Associating hotkey {} on-chain", crate::utils::short_ss58(&hk));
+            let hash = client.try_associate_hotkey(&pair, &hk).await?;
+            print_tx_result(output, &hash, "Hotkey associated.");
+            Ok(())
+        }
+        Commands::Wallet(WalletCommands::CheckSwap { address }) => {
+            let client = connect(&network, dry_run).await?;
+            let addr = resolve_coldkey_address(address, &cli.wallet_dir, &cli.wallet);
+            let swap = client.get_coldkey_swap_scheduled(&addr).await?;
+            match swap {
+                Some((block, new_ss58)) => {
+                    if output == "json" {
+                        print_json(&serde_json::json!({
+                            "address": addr,
+                            "swap_scheduled": true,
+                            "execution_block": block,
+                            "new_coldkey": new_ss58,
+                        }));
+                    } else {
+                        println!("Coldkey swap scheduled for {}", addr);
+                        println!("  Execution block: {}", block);
+                        println!("  New coldkey:     {}", new_ss58);
+                    }
+                }
+                None => {
+                    if output == "json" {
+                        print_json(&serde_json::json!({
+                            "address": addr,
+                            "swap_scheduled": false,
+                        }));
+                    } else {
+                        println!("No coldkey swap scheduled for {}", addr);
+                    }
+                }
+            }
+            Ok(())
+        }
         Commands::Wallet(cmd) => {
             wallet_cmds::handle_wallet(
                 cmd,

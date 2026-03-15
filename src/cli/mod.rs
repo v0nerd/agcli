@@ -372,6 +372,18 @@ pub enum WalletCommands {
         #[arg(long)]
         input: String,
     },
+    /// Associate a hotkey with your coldkey on-chain
+    AssociateHotkey {
+        /// Hotkey SS58 (defaults to wallet hotkey)
+        #[arg(long)]
+        hotkey: Option<String>,
+    },
+    /// Check coldkey swap status (scheduled swap and arbitration)
+    CheckSwap {
+        /// SS58 address to check (defaults to wallet coldkey)
+        #[arg(long)]
+        address: Option<String>,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -576,6 +588,12 @@ pub enum StakeCommands {
         /// Hotkey SS58 to auto-stake to
         #[arg(long)]
         hotkey: Option<String>,
+    },
+    /// Show auto-stake destination for each subnet
+    ShowAuto {
+        /// SS58 address (defaults to wallet coldkey)
+        #[arg(long)]
+        address: Option<String>,
     },
     /// Set root claim type (how root emissions are handled)
     SetClaim {
@@ -798,6 +816,21 @@ pub enum SubnetCommands {
         /// Value to set (interpreted based on parameter type)
         #[arg(long)]
         value: Option<String>,
+    },
+    /// Set subnet token symbol (subnet owner only)
+    SetSymbol {
+        /// Subnet UID
+        #[arg(long)]
+        netuid: u16,
+        /// Token symbol (e.g. "ALPHA", "SN1")
+        #[arg(long)]
+        symbol: String,
+    },
+    /// Show emission split across mechanisms for a subnet
+    EmissionSplit {
+        /// Subnet UID
+        #[arg(long)]
+        netuid: u16,
     },
 }
 
@@ -1076,7 +1109,7 @@ pub enum ProxyCommands {
         /// Proxy delegate SS58 address
         #[arg(long)]
         delegate: String,
-        /// Proxy type (any, owner, staking, non_transfer, non_critical, governance, senate)
+        /// Proxy type (any, owner, staking, non_transfer, non_critical, governance, senate, registration, transfer, small_transfer, root_weights, child_keys, swap_hotkey, subnet_lease_beneficiary, root_claim)
         #[arg(long, default_value = "any")]
         proxy_type: String,
         /// Delay in blocks before proxy can execute (0 = immediate)
@@ -1094,6 +1127,36 @@ pub enum ProxyCommands {
         /// Delay (must match what was set)
         #[arg(long, default_value = "0")]
         delay: u32,
+    },
+    /// Create a pure (anonymous) proxy account
+    CreatePure {
+        /// Proxy type for the pure account
+        #[arg(long, default_value = "any")]
+        proxy_type: String,
+        /// Delay in blocks
+        #[arg(long, default_value = "0")]
+        delay: u32,
+        /// Disambiguation index (for creating multiple pure proxies)
+        #[arg(long, default_value = "0")]
+        index: u16,
+    },
+    /// Kill (destroy) a pure proxy account — funds become inaccessible!
+    KillPure {
+        /// SS58 address of the account that spawned this pure proxy
+        #[arg(long)]
+        spawner: String,
+        /// Proxy type of the pure account
+        #[arg(long, default_value = "any")]
+        proxy_type: String,
+        /// Disambiguation index used at creation
+        #[arg(long, default_value = "0")]
+        index: u16,
+        /// Block height when the pure proxy was created
+        #[arg(long)]
+        height: u32,
+        /// Extrinsic index in the creation block
+        #[arg(long)]
+        ext_index: u32,
     },
     /// List proxy accounts for an address
     List {
@@ -1241,6 +1304,20 @@ pub enum CrowdloanCommands {
         /// New minimum contribution in TAO
         #[arg(long)]
         min_contribution: f64,
+    },
+    /// List all crowdloans
+    List,
+    /// Show detailed info for a specific crowdloan
+    Info {
+        /// Crowdloan ID
+        #[arg(long)]
+        crowdloan_id: u32,
+    },
+    /// List contributors to a crowdloan
+    Contributors {
+        /// Crowdloan ID
+        #[arg(long)]
+        crowdloan_id: u32,
     },
 }
 

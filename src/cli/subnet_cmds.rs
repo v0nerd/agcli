@@ -732,6 +732,36 @@ pub(super) async fn handle_subnet(
             )
             .await
         }
+        SubnetCommands::SetSymbol { netuid, symbol } => {
+            let mut wallet = open_wallet(wallet_dir, wallet_name)?;
+            unlock_coldkey(&mut wallet, password)?;
+            println!("Setting symbol for SN{} to \"{}\"", netuid, symbol);
+            let hash = client
+                .set_subnet_symbol(wallet.coldkey()?, NetUid(netuid), &symbol)
+                .await?;
+            println!("Symbol set. Tx: {}", hash);
+            Ok(())
+        }
+        SubnetCommands::EmissionSplit { netuid } => {
+            match client.get_emission_split(NetUid(netuid)).await? {
+                Some(splits) => {
+                    let total: u64 = splits.iter().map(|(_, v)| v).sum();
+                    println!("Emission split for SN{}:", netuid);
+                    for (name, weight) in &splits {
+                        let pct = if total > 0 {
+                            *weight as f64 / total as f64 * 100.0
+                        } else {
+                            0.0
+                        };
+                        println!("  {:<12} {} ({:.1}%)", name, weight, pct);
+                    }
+                }
+                None => {
+                    println!("No emission split configured for SN{} (using default)", netuid);
+                }
+            }
+            Ok(())
+        }
     }
 }
 

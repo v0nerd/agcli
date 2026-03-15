@@ -706,6 +706,92 @@ impl Client {
         self.sign_submit(&tx, pair).await
     }
 
+    /// Create a pure (anonymous) proxy account.
+    pub async fn create_pure_proxy(
+        &self,
+        pair: &sr25519::Pair,
+        proxy_type: &str,
+        delay: u32,
+        index: u16,
+    ) -> Result<String> {
+        use subxt::dynamic::Value;
+        let variant = parse_proxy_type(proxy_type);
+        let tx = subxt::dynamic::tx(
+            "Proxy",
+            "create_pure",
+            vec![
+                Value::unnamed_variant(variant, []),
+                Value::u128(delay as u128),
+                Value::u128(index as u128),
+            ],
+        );
+        self.sign_submit(&tx, pair).await
+    }
+
+    /// Kill (destroy) a pure proxy account. Funds become inaccessible.
+    pub async fn kill_pure_proxy(
+        &self,
+        pair: &sr25519::Pair,
+        spawner_ss58: &str,
+        proxy_type: &str,
+        index: u16,
+        height: u32,
+        ext_index: u32,
+    ) -> Result<String> {
+        use subxt::dynamic::Value;
+        let spawner = Self::ss58_to_account_id(spawner_ss58)?;
+        let variant = parse_proxy_type(proxy_type);
+        let tx = subxt::dynamic::tx(
+            "Proxy",
+            "kill_pure",
+            vec![
+                Value::unnamed_variant("Id", [Value::from_bytes(spawner.0)]),
+                Value::unnamed_variant(variant, []),
+                Value::u128(index as u128),
+                Value::u128(height as u128),    // compact<BlockNumber>
+                Value::u128(ext_index as u128), // compact<u32>
+            ],
+        );
+        self.sign_submit(&tx, pair).await
+    }
+
+    /// Associate a hotkey with the coldkey on-chain.
+    pub async fn try_associate_hotkey(
+        &self,
+        pair: &sr25519::Pair,
+        hotkey_ss58: &str,
+    ) -> Result<String> {
+        use subxt::dynamic::Value;
+        let hk = Self::ss58_to_account_id(hotkey_ss58)?;
+        self.submit_raw_call(
+            pair,
+            "SubtensorModule",
+            "try_associate_hotkey",
+            vec![Value::from_bytes(hk.0)],
+        )
+        .await
+    }
+
+    /// Set subnet token symbol (subnet owner only).
+    pub async fn set_subnet_symbol(
+        &self,
+        pair: &sr25519::Pair,
+        netuid: NetUid,
+        symbol: &str,
+    ) -> Result<String> {
+        use subxt::dynamic::Value;
+        self.submit_raw_call(
+            pair,
+            "SubtensorModule",
+            "update_symbol",
+            vec![
+                Value::u128(netuid.0 as u128),
+                Value::from_bytes(symbol.as_bytes()),
+            ],
+        )
+        .await
+    }
+
     // ──────── Auto-Stake ────────
 
     /// Set the auto-stake hotkey for a subnet (rewards auto-compound to this hotkey).
@@ -1196,16 +1282,27 @@ impl Client {
 }
 
 /// Parse a proxy type string to the on-chain variant name.
-fn parse_proxy_type(s: &str) -> &'static str {
-    match s {
-        "any" | "Any" => "Any",
-        "owner" | "Owner" => "Owner",
-        "non_transfer" | "NonTransfer" => "NonTransfer",
-        "staking" | "Staking" => "Staking",
-        "non_critical" | "NonCritical" => "NonCritical",
-        "triumvirate" | "Triumvirate" => "Triumvirate",
-        "governance" | "Governance" => "Governance",
-        "senate" | "Senate" => "Senate",
+pub(crate) fn parse_proxy_type(s: &str) -> &'static str {
+    match s.to_lowercase().as_str() {
+        "any" => "Any",
+        "owner" => "Owner",
+        "nontransfer" | "non_transfer" => "NonTransfer",
+        "staking" => "Staking",
+        "noncritical" | "non_critical" => "NonCritical",
+        "triumvirate" => "Triumvirate",
+        "governance" => "Governance",
+        "senate" => "Senate",
+        "nonfungible" | "non_fungible" => "NonFungible",
+        "registration" => "Registration",
+        "transfer" => "Transfer",
+        "smalltransfer" | "small_transfer" => "SmallTransfer",
+        "rootweights" | "root_weights" => "RootWeights",
+        "childkeys" | "child_keys" => "ChildKeys",
+        "sudouncheckedsetcode" | "sudo_unchecked_set_code" => "SudoUncheckedSetCode",
+        "swaphotkey" | "swap_hotkey" => "SwapHotkey",
+        "subnetleasebeneficiary" | "subnet_lease_beneficiary" => "SubnetLeaseBeneficiary",
+        "rootclaim" | "root_claim" => "RootClaim",
         _ => "Any",
     }
 }
+

@@ -314,6 +314,10 @@ pub async fn handle_wallet(
             }
             Ok(())
         }
+        // These variants are handled in commands.rs with a Client connection
+        WalletCommands::AssociateHotkey { .. } | WalletCommands::CheckSwap { .. } => {
+            unreachable!("handled in commands.rs")
+        }
         WalletCommands::Derive { input } => {
             if input.starts_with("0x") {
                 // Public key hex
