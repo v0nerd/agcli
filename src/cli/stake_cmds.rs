@@ -125,6 +125,7 @@ pub async fn handle_stake(
             }
             if mev {
                 eprintln!("MEV shield: encrypting stake operation");
+                tracing::info!("MEV shield: encrypting stake operation");
             }
             stake_op(
                 "Adding",
@@ -147,6 +148,7 @@ pub async fn handle_stake(
             }
             if mev {
                 eprintln!("MEV shield: encrypting unstake operation");
+                tracing::info!("MEV shield: encrypting unstake operation");
             }
             stake_op(
                 "Removing",
@@ -405,7 +407,10 @@ pub async fn handle_stake(
                     if trimmed.is_empty() { continue; }
                     match trimmed.parse::<u16>() {
                         Ok(id) => ids.push(id),
-                        Err(_) => eprintln!("Warning: ignoring invalid subnet ID '{}'", trimmed),
+                        Err(_) => {
+                            eprintln!("Warning: ignoring invalid subnet ID '{}'", trimmed);
+                            tracing::warn!(input = trimmed, "Ignoring invalid subnet ID");
+                        }
                     }
                 }
                 ids
@@ -526,6 +531,7 @@ async fn check_slippage(
             "Warning: estimated slippage is {:.2}% on SN{}",
             slippage, netuid
         );
+        tracing::warn!(slippage_pct = slippage, netuid = netuid, "Estimated slippage exceeds 2%");
     }
     Ok(())
 }

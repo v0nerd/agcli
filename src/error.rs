@@ -106,6 +106,50 @@ pub fn classify(err: &anyhow::Error) -> i32 {
     exit_code::GENERIC
 }
 
+/// Provide an actionable hint based on the error code and message.
+pub fn hint(code: i32, msg: &str) -> Option<&'static str> {
+    let lower = msg.to_lowercase();
+    match code {
+        exit_code::NETWORK => {
+            if lower.contains("dns") {
+                Some("Tip: Check your DNS settings or try a different endpoint with --endpoint <url>")
+            } else if lower.contains("refused") || lower.contains("unreachable") {
+                Some("Tip: The chain endpoint may be down. Try --endpoint wss://entrypoint-finney.opentensor.ai:443 or check your network connection")
+            } else {
+                Some("Tip: Check your internet connection, or try a different endpoint with --endpoint <url>")
+            }
+        }
+        exit_code::AUTH => {
+            if lower.contains("password") {
+                Some("Tip: Verify your password. Use AGCLI_PASSWORD env var for non-interactive mode")
+            } else if lower.contains("hotkey") {
+                Some("Tip: Create a hotkey with `agcli wallet create-hotkey` or pass --hotkey <ss58>")
+            } else {
+                Some("Tip: Check wallet path with --wallet-dir and --wallet flags. List wallets: `agcli wallet list`")
+            }
+        }
+        exit_code::TIMEOUT => {
+            Some("Tip: Increase timeout with --timeout <seconds> (default: none). The chain may be congested")
+        }
+        exit_code::CHAIN => {
+            if lower.contains("insufficient") {
+                Some("Tip: Check your balance with `agcli balance`. Transaction fees require a small reserve")
+            } else if lower.contains("rate limit") {
+                Some("Tip: Wait a few blocks before retrying. Use `agcli block latest` to check block progress")
+            } else if lower.contains("nonce") {
+                Some("Tip: Another transaction may be pending. Wait for it to finalize before retrying")
+            } else {
+                Some("Tip: The chain rejected this operation. Check `agcli doctor` for diagnostic info")
+            }
+        }
+        exit_code::IO => {
+            Some("Tip: Check file permissions and paths. Use --wallet-dir to specify wallet location")
+        }
+        exit_code::VALIDATION => None, // Validation errors already contain specific hints
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -208,5 +252,75 @@ mod tests {
     fn classify_case_insensitive() {
         let err = anyhow::anyhow!("TIMEOUT waiting for block finalization");
         assert_eq!(classify(&err), exit_code::TIMEOUT);
+    }
+
+    // ──── hint() tests ────
+
+    #[test]
+    fn hint_network_dns() {
+        let h = hint(exit_code::NETWORK, "DNS resolution failed");
+        assert!(h.is_some());
+        assert!(h.unwrap().contains("DNS"));
+    }
+
+    #[test]
+    fn hint_network_refused() {
+        let h = hint(exit_code::NETWORK, "Connection refused");
+        assert!(h.is_some());
+        assert!(h.unwrap().contains("endpoint"));
+    }
+
+    #[test]
+    fn hint_auth_password() {
+        let h = hint(exit_code::AUTH, "wrong password");
+        assert!(h.is_some());
+        assert!(h.unwrap().contains("password"));
+    }
+
+    #[test]
+    fn hint_auth_hotkey() {
+        let h = hint(exit_code::AUTH, "No hotkey loaded");
+        assert!(h.is_some());
+        assert!(h.unwrap().contains("hotkey"));
+    }
+
+    #[test]
+    fn hint_timeout() {
+        let h = hint(exit_code::TIMEOUT, "timed out");
+        assert!(h.is_some());
+        assert!(h.unwrap().contains("--timeout"));
+    }
+
+    #[test]
+    fn hint_chain_insufficient() {
+        let h = hint(exit_code::CHAIN, "insufficient balance");
+        assert!(h.is_some());
+        assert!(h.unwrap().contains("balance"));
+    }
+
+    #[test]
+    fn hint_chain_nonce() {
+        let h = hint(exit_code::CHAIN, "Nonce already used");
+        assert!(h.is_some());
+        assert!(h.unwrap().contains("pending"));
+    }
+
+    #[test]
+    fn hint_io() {
+        let h = hint(exit_code::IO, "permission denied");
+        assert!(h.is_some());
+    }
+
+    #[test]
+    fn hint_validation_none() {
+        // Validation errors don't get hints (they already contain specific messages)
+        let h = hint(exit_code::VALIDATION, "invalid input");
+        assert!(h.is_none());
+    }
+
+    #[test]
+    fn hint_generic_none() {
+        let h = hint(exit_code::GENERIC, "unknown error");
+        assert!(h.is_none());
     }
 }

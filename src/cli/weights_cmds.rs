@@ -43,6 +43,7 @@ pub(super) async fn handle_weights(
                 if alpha.tao() < 1000.0 {
                     eprintln!("Warning: hotkey {} has {:.2}τ stake-weight on SN{} (minimum ~1000τ required).",
                         crate::utils::short_ss58(&hk_ss58), alpha.tao(), netuid);
+                    tracing::warn!(hotkey = %crate::utils::short_ss58(&hk_ss58), stake = alpha.tao(), netuid = netuid, "Hotkey has low stake-weight (minimum ~1000τ required)");
                     false
                 } else {
                     true
@@ -58,6 +59,7 @@ pub(super) async fn handle_weights(
                 .unwrap_or(false);
             if cr_enabled {
                 eprintln!("Warning: SN{} has commit-reveal enabled. Use `agcli weights commit-reveal` instead.", netuid);
+                tracing::warn!(netuid = netuid, "Subnet has commit-reveal enabled; use `agcli weights commit-reveal` instead");
             }
 
             // Check rate limit
@@ -196,6 +198,7 @@ pub(super) async fn handle_weights(
 
             if !cr_enabled {
                 eprintln!("Warning: SN{} does NOT have commit-reveal enabled. Using direct set_weights instead.", netuid);
+                tracing::warn!(netuid = netuid, "Subnet does not have commit-reveal enabled; falling back to direct set_weights");
                 let hash = client
                     .set_weights(wallet.hotkey()?, NetUid(netuid), &uids, &wts, version_key)
                     .await?;

@@ -91,15 +91,23 @@ async fn main() {
         Ok(()) => std::process::exit(0),
         Err(e) => {
             let code = agcli::error::classify(&e);
+            let msg = format!("{:#}", e);
             if json_errors {
                 // Structured error JSON on stderr for agents
-                agcli::cli::helpers::eprint_json(&serde_json::json!({
+                let mut payload = serde_json::json!({
                     "error": true,
                     "code": code,
-                    "message": format!("{:#}", e),
-                }));
+                    "message": &msg,
+                });
+                if let Some(hint) = agcli::error::hint(code, &msg) {
+                    payload["hint"] = serde_json::Value::String(hint.to_string());
+                }
+                agcli::cli::helpers::eprint_json(&payload);
             } else {
-                eprintln!("Error: {:#}", e);
+                eprintln!("Error: {}", msg);
+                if let Some(hint) = agcli::error::hint(code, &msg) {
+                    eprintln!("{}", hint);
+                }
             }
             std::process::exit(code);
         }

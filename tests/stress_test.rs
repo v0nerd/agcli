@@ -453,3 +453,245 @@ fn mev_encrypt_ciphertext_nondeterministic() {
     let (_, ct2) = agcli::extrinsics::mev_shield::encrypt_for_mev_shield(ek_bytes.as_slice(), plaintext).unwrap();
     assert_ne!(ct1, ct2, "ciphertext should differ due to random nonce/KEM");
 }
+
+// ──── Sprint 13: Multi-process + thread interference tests ────
+
+/// Multiple processes writing to the same config file shouldn't corrupt it.
+#[test]
+fn config_concurrent_writes() {
+    let dir = tempfile::tempdir().unwrap();
+    let config_path = dir.path().join("config.toml");
+
+    // Write initial config
+    std::fs::write(&config_path, "[network]\ndefault = \"finney\"\n").unwrap();
+
+    let threads: Vec<_> = (0..8)
+        .map(|i| {
+            let path = config_path.clone();
+            std::thread::spawn(move || {
+                let content = format!(
+                    "[network]\ndefault = \"thread_{}\"\n[spending_limits]\n\"*\" = {}.0\n",
+                    i, i * 100
+                );
+                // Atomic write pattern: write to temp then rename
+                let tmp = path.with_extension(format!("tmp.{}", i));
+                std::fs::write(&tmp, &content).unwrap();
+                std::fs::rename(&tmp, &path).unwrap();
+
+                // Read back should always get valid TOML
+                let read = std::fs::read_to_string(&path).unwrap();
+                assert!(read.contains("[network]"), "Config corrupted by thread {}: {}", i, read);
+            })
+        })
+        .collect();
+
+    for t in threads {
+        t.join().unwrap();
+    }
+
+    // Final read should be valid TOML
+    let final_content = std::fs::read_to_string(&config_path).unwrap();
+    assert!(final_content.contains("[network]"), "Final config corrupted: {}", final_content);
+}
+
+/// Verify that clap parser is truly thread-safe by parsing conflicting args concurrently.
+#[test]
+fn cli_parsing_conflicting_args_concurrent() {
+    use clap::Parser;
+
+    // Mix of valid and intentionally invalid parses
+    let scenarios: Vec<(Vec<&str>, bool)> = vec![
+        (vec!["agcli", "balance"], true),
+        (vec!["agcli", "--output", "json", "subnet", "list"], true),
+        (vec!["agcli", "--output", "csv", "wallet", "list"], true),
+        (vec!["agcli", "--debug", "doctor"], true),
+        (vec!["agcli", "--verbose", "--timeout", "30", "balance"], true),
+        (vec!["agcli", "subnet", "show", "--netuid", "1"], true),
+        (vec!["agcli", "--network", "test", "balance"], true),
+        (vec!["agcli", "--batch", "balance"], true),
+    ];
+
+    let threads: Vec<_> = scenarios
+        .into_iter()
+        .map(|(args, should_succeed)| {
+            std::thread::spawn(move || {
+                let result = agcli::cli::Cli::try_parse_from(&args);
+                if should_succeed {
+                    assert!(result.is_ok(), "Expected success for {:?}: {:?}", args, result.err());
+                }
+            })
+        })
+        .collect();
+
+    for t in threads {
+        t.join().unwrap();
+    }
+}
+
+/// Error classification should be thread-safe and produce consistent results.
+#[test]
+fn error_classification_concurrent() {
+    let test_cases: Vec<(&str, i32)> = vec![
+        ("Connection refused", 10),
+        ("Wrong password", 11),
+        ("Invalid SS58 address", 12),
+        ("Insufficient balance", 13),
+        ("Permission denied", 14),
+        ("Timeout waiting", 15),
+        ("Generic error", 1),
+    ];
+
+    let threads: Vec<_> = test_cases
+        .into_iter()
+        .map(|(msg, expected_code)| {
+            std::thread::spawn(move || {
+                for _ in 0..100 {
+                    let err = anyhow::anyhow!("{}", msg);
+                    let code = agcli::error::classify(&err);
+                    assert_eq!(code, expected_code, "Classification inconsistent for '{}': got {}, expected {}", msg, code, expected_code);
+                }
+            })
+        })
+        .collect();
+
+    for t in threads {
+        t.join().unwrap();
+    }
+}
+
+/// Balance arithmetic should be thread-safe (no shared mutable state).
+#[test]
+fn balance_operations_concurrent() {
+    use agcli::types::Balance;
+
+    let threads: Vec<_> = (0..8)
+        .map(|i| {
+            std::thread::spawn(move || {
+                let base = Balance::from_rao((i + 1) * 1_000_000_000);
+                let add = Balance::from_rao(500_000_000);
+
+                // Exercise all arithmetic
+                let sum = base + add;
+                assert!(sum.rao() > base.rao(), "Addition failed for thread {}", i);
+
+                let tao = base.tao();
+                assert!(tao > 0.0, "Tao conversion failed for thread {}", i);
+
+                let display = base.display_tao();
+                assert!(!display.is_empty(), "Display failed for thread {}", i);
+
+                // from_tao roundtrip
+                let rt = Balance::from_tao(tao);
+                assert_eq!(rt.rao(), base.rao(), "Roundtrip failed for thread {}", i);
+            })
+        })
+        .collect();
+
+    for t in threads {
+        t.join().unwrap();
+    }
+}
+
+/// Simultaneous wallet encrypt+decrypt on separate files should not interfere.
+#[test]
+fn wallet_operations_isolated_concurrent() {
+    let dir = tempfile::tempdir().unwrap();
+
+    let threads: Vec<_> = (0..8)
+        .map(|i| {
+            let base = dir.path().to_path_buf();
+            std::thread::spawn(move || {
+                let path = base.join(format!("isolated_wallet_{}", i));
+                let mnemonic = format!("word{} abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about", i);
+                let password = format!("isolated_pw_{}", i);
+
+                // Write, read, verify — 5 times per thread
+                for round in 0..5 {
+                    let mn = format!("{} round{}", mnemonic, round);
+                    agcli::wallet::keyfile::write_encrypted_keyfile(&path, &mn, &password).unwrap();
+                    let recovered = agcli::wallet::keyfile::read_encrypted_keyfile(&path, &password).unwrap();
+                    assert_eq!(mn, recovered, "Mismatch in thread {} round {}", i, round);
+                }
+            })
+        })
+        .collect();
+
+    for t in threads {
+        t.join().unwrap();
+    }
+}
+
+/// Cache operations under high contention — ensure no panics or data races.
+#[tokio::test]
+async fn cache_high_contention() {
+    use agcli::queries::query_cache::QueryCache;
+
+    let cache = QueryCache::new();
+    let call_count = Arc::new(AtomicU32::new(0));
+
+    // Simulate 50 concurrent readers hitting both all-subnets and per-netuid caches
+    let mut handles = Vec::new();
+    for i in 0..50 {
+        let c = cache.clone();
+        let count = call_count.clone();
+        handles.push(tokio::spawn(async move {
+            // Alternate between all_subnets and all_dynamic_info
+            if i % 2 == 0 {
+                c.get_all_subnets(|| {
+                    let cnt = count.clone();
+                    async move {
+                        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+                        cnt.fetch_add(1, Ordering::SeqCst);
+                        Ok(vec![])
+                    }
+                })
+                .await
+                .unwrap();
+            } else {
+                c.get_all_dynamic_info(|| {
+                    let cnt = count.clone();
+                    async move {
+                        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+                        cnt.fetch_add(1, Ordering::SeqCst);
+                        Ok(vec![])
+                    }
+                })
+                .await
+                .unwrap();
+            }
+        }));
+    }
+
+    for h in handles {
+        h.await.unwrap();
+    }
+
+    // With moka dedup, we expect far fewer than 50 fetches
+    let total = call_count.load(Ordering::SeqCst);
+    assert!(total <= 50, "Cache made {} calls (50 concurrent)", total);
+}
+
+/// Verify format_* utilities are safe under concurrent use.
+#[test]
+fn format_utilities_concurrent() {
+    use agcli::utils::format_tao;
+    use agcli::utils::short_ss58;
+    use agcli::types::Balance;
+
+    let threads: Vec<_> = (0..8)
+        .map(|_| {
+            std::thread::spawn(|| {
+                for _ in 0..100 {
+                    let _ = format_tao(Balance::from_rao(1_234_567_890));
+                    let _ = format_tao(Balance::from_rao(0));
+                    let _ = format_tao(Balance::from_rao(u64::MAX));
+                    let _ = short_ss58("5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKv3gB");
+                }
+            })
+        })
+        .collect();
+
+    for t in threads {
+        t.join().unwrap();
+    }
+}

@@ -250,10 +250,10 @@ pub(super) async fn handle_subnet(
                         ),
                     ];
                     render_rows(
-                        "table",
+                        output,
                         &rows,
-                        "",
-                        |_| String::new(),
+                        "parameter,value",
+                        |r| format!("{},{}", r.0, r.1),
                         &["Parameter", "Value"],
                         |r| vec![r.0.clone(), r.1.clone()],
                         Some(&format!("Hyperparameters for SN{}", netuid)),
@@ -438,6 +438,7 @@ pub(super) async fn handle_subnet(
                 };
                 let path = crate::queries::cache::save(&mg)?;
                 eprintln!("Snapshot saved: {}", path.display());
+                tracing::info!(path = %path.display(), "Metagraph snapshot saved");
             }
 
             render_rows(
@@ -534,10 +535,21 @@ pub(super) async fn handle_subnet(
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
             unlock_coldkey(&mut wallet, password)?;
             println!("Dissolving subnet SN{} (owner only)", netuid);
+            println!("WARNING: This action cannot be undone. The subnet and all its state will be permanently removed.");
+            if !is_batch_mode() {
+                let proceed = dialoguer::Confirm::new()
+                    .with_prompt("Are you sure you want to dissolve this subnet?")
+                    .default(false)
+                    .interact()?;
+                if !proceed {
+                    println!("Cancelled.");
+                    return Ok(());
+                }
+            }
             let hash = client
                 .dissolve_network(wallet.coldkey()?, NetUid(netuid))
                 .await?;
-            println!("Subnet dissolved. Tx: {}", hash);
+            print_tx_result(output, &hash, "Subnet dissolved.");
             Ok(())
         }
         SubnetCommands::Watch { netuid, interval } => {
@@ -981,6 +993,8 @@ async fn handle_subnet_monitor(
         );
         eprintln!("Tracking: registrations, deregistrations, emission shifts, stake changes\n");
     }
+    tracing::info!(netuid = netuid, interval_secs = interval, "Starting subnet monitor");
+    tracing::info!(netuid = netuid, "Tracking: registrations, deregistrations, emission shifts, stake changes");
 
     struct NeuronSnapshot {
         hotkey: String,
@@ -1840,6 +1854,41 @@ const SUBNET_PARAMS: &[ParamDef] = &[
     ParamDef { name: "min_non_immune_uids", call: "sudo_set_min_non_immune_uids", ty: ParamType::U16, desc: "Minimum non-immune neurons" },
 ];
 
+/// Extract the current value of a named parameter from hyperparameters.
+fn current_param_value(h: &crate::types::chain_data::SubnetHyperparameters, name: &str) -> Option<String> {
+    Some(match name {
+        "tempo" => h.tempo.to_string(),
+        "rho" => h.rho.to_string(),
+        "kappa" => h.kappa.to_string(),
+        "immunity_period" => h.immunity_period.to_string(),
+        "min_allowed_weights" => h.min_allowed_weights.to_string(),
+        "max_allowed_uids" => h.max_weights_limit.to_string(),
+        "max_allowed_validators" => h.max_validators.to_string(),
+        "min_difficulty" => h.min_difficulty.to_string(),
+        "max_difficulty" => h.max_difficulty.to_string(),
+        "weights_version" => h.weights_version.to_string(),
+        "weights_rate_limit" => h.weights_rate_limit.to_string(),
+        "adjustment_interval" => h.adjustment_interval.to_string(),
+        "adjustment_alpha" => h.adjustment_alpha.to_string(),
+        "activity_cutoff" => h.activity_cutoff.to_string(),
+        "registration_allowed" => h.registration_allowed.to_string(),
+        "pow_registration_allowed" => return None,
+        "target_regs_per_interval" => h.target_regs_per_interval.to_string(),
+        "min_burn" => h.min_burn.rao().to_string(),
+        "max_burn" => h.max_burn.rao().to_string(),
+        "bonds_moving_average" => h.bonds_moving_avg.to_string(),
+        "max_regs_per_block" => h.max_regs_per_block.to_string(),
+        "serving_rate_limit" => h.serving_rate_limit.to_string(),
+        "difficulty" => h.difficulty.to_string(),
+        "commit_reveal_weights_enabled" => h.commit_reveal_weights_enabled.to_string(),
+        "commit_reveal_weights_interval" => h.commit_reveal_weights_interval.to_string(),
+        "liquid_alpha_enabled" => h.liquid_alpha_enabled.to_string(),
+        "bonds_penalty" | "bonds_reset_enabled" | "commit_reveal_version"
+        | "yuma" | "min_allowed_uids" | "min_non_immune_uids" => return None,
+        _ => return None,
+    })
+}
+
 async fn handle_subnet_set_param(
     client: &Client,
     netuid: u16,
@@ -1951,11 +2000,30 @@ async fn handle_subnet_set_param(
         }
     };
 
+    // Fetch current value for display
+    let current_display = match client.get_subnet_hyperparams(NetUid(netuid)).await {
+        Ok(Some(h)) => current_param_value(&h, param)
+            .map(|v| format!(" (current: {})", v))
+            .unwrap_or_default(),
+        _ => String::new(),
+    };
+
     // Confirm
     println!(
-        "Setting SN{} {} = {} (via {})",
-        netuid, def.name, value_str, def.call
+        "Setting SN{} {} = {}{} (via {})",
+        netuid, def.name, value_str, current_display, def.call
     );
+
+    if !crate::cli::helpers::is_batch_mode() {
+        let proceed = dialoguer::Confirm::new()
+            .with_prompt("Proceed?")
+            .default(true)
+            .interact()?;
+        if !proceed {
+            println!("Cancelled.");
+            return Ok(());
+        }
+    }
 
     // Unlock wallet
     let mut wallet = open_wallet(wallet_dir, wallet_name)?;

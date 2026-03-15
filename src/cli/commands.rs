@@ -70,11 +70,17 @@ pub async fn execute(cli: Cli) -> Result<()> {
                         .map(|t| format!(", alert below {}", t.display_tao()))
                         .unwrap_or_default()
                 );
+                tracing::info!(
+                    address = %crate::utils::short_ss58(&addr),
+                    interval_secs = interval,
+                    "Starting balance watch mode"
+                );
                 loop {
                     let balance = match client.get_balance_ss58(&addr).await {
                         Ok(b) => b,
                         Err(e) => {
                             eprintln!("[{}] Warning: balance query failed: {}", chrono::Local::now().format("%H:%M:%S"), e);
+                            tracing::warn!(error = %e, "Balance query failed during watch mode");
                             tokio::select! {
                                 _ = tokio::time::sleep(tokio::time::Duration::from_secs(interval)) => {},
                                 _ = tokio::signal::ctrl_c() => {
@@ -148,7 +154,17 @@ pub async fn execute(cli: Cli) -> Result<()> {
                     );
                 }
             }
-            println!("Transferring {} to {}", balance.display_tao(), dest);
+            println!("Transferring {} to {}", balance.display_tao(), crate::utils::short_ss58(&dest));
+            if !is_batch_mode() {
+                let proceed = dialoguer::Confirm::new()
+                    .with_prompt("Proceed?")
+                    .default(true)
+                    .interact()?;
+                if !proceed {
+                    println!("Cancelled.");
+                    return Ok(());
+                }
+            }
             let hash = client.transfer(wallet.coldkey()?, &dest, balance).await?;
             print_tx_result(output, &hash, "Transaction submitted.");
             Ok(())
@@ -159,8 +175,18 @@ pub async fn execute(cli: Cli) -> Result<()> {
             unlock_coldkey(&mut wallet, password.as_deref())?;
             println!(
                 "Transferring all balance to {} (keep_alive={})",
-                dest, keep_alive
+                crate::utils::short_ss58(&dest), keep_alive
             );
+            if !is_batch_mode() {
+                let proceed = dialoguer::Confirm::new()
+                    .with_prompt("Transfer ALL funds? This will empty your account.")
+                    .default(false)
+                    .interact()?;
+                if !proceed {
+                    println!("Cancelled.");
+                    return Ok(());
+                }
+            }
             let hash = client
                 .transfer_all(wallet.coldkey()?, &dest, keep_alive)
                 .await?;
