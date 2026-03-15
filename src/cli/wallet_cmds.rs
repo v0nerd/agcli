@@ -59,7 +59,7 @@ pub async fn handle_wallet(
             } else if output == "csv" {
                 println!("name,coldkey");
                 for (name, addr) in &entries {
-                    println!("{},{}", name, addr);
+                    println!("{},{}", crate::cli::helpers::csv_escape(name), addr);
                 }
             } else if entries.is_empty() {
                 println!("No wallets found in {}", wallet_dir);
@@ -137,18 +137,20 @@ pub async fn handle_wallet(
                 if all {
                     println!("wallet,coldkey,hotkey_name,hotkey_address");
                     for e in &entries {
+                        let esc_name = crate::cli::helpers::csv_escape(&e.name);
                         if e.hotkeys.is_empty() {
-                            println!("{},{},,", e.name, e.coldkey);
+                            println!("{},{},,", esc_name, e.coldkey);
                         } else {
                             for (hk_name, hk_addr) in &e.hotkeys {
-                                println!("{},{},{},{}", e.name, e.coldkey, hk_name, hk_addr);
+                                println!("{},{},{},{}", esc_name, e.coldkey,
+                                    crate::cli::helpers::csv_escape(hk_name), hk_addr);
                             }
                         }
                     }
                 } else {
                     println!("name,coldkey");
                     for e in &entries {
-                        println!("{},{}", e.name, e.coldkey);
+                        println!("{},{}", crate::cli::helpers::csv_escape(&e.name), e.coldkey);
                     }
                 }
             } else {

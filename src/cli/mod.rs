@@ -91,6 +91,10 @@ pub struct Cli {
     #[arg(long, global = true, env = "AGCLI_MEV")]
     pub mev: bool,
 
+    /// Dry-run: show what would be submitted without actually signing or broadcasting
+    #[arg(long, global = true, env = "AGCLI_DRY_RUN")]
+    pub dry_run: bool,
+
     #[command(subcommand)]
     pub command: Commands,
 }

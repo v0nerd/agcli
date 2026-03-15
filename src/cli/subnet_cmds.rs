@@ -88,7 +88,7 @@ pub(super) async fn handle_subnet(
                     format!(
                         "{},{},{},{},{},{},{},{}",
                         s.netuid,
-                        s.name,
+                        csv_escape(&s.name),
                         s.n,
                         s.max_n,
                         s.tempo,
@@ -253,7 +253,7 @@ pub(super) async fn handle_subnet(
                         output,
                         &rows,
                         "parameter,value",
-                        |r| format!("{},{}", r.0, r.1),
+                        |r| format!("{},{}", csv_escape(&r.0), csv_escape(&r.1)),
                         &["Parameter", "Value"],
                         |r| vec![r.0.clone(), r.1.clone()],
                         Some(&format!("Hyperparameters for SN{}", netuid)),
@@ -1601,7 +1601,7 @@ async fn handle_subnet_probe(
                 r.hotkey,
                 r.ip,
                 r.port,
-                r.status,
+                csv_escape(&r.status),
                 r.latency_ms.map(|l| format!("{:.1}", l)).unwrap_or_default(),
                 r.version
             )
@@ -1751,7 +1751,7 @@ async fn handle_subnet_commits(
                         e.commit_block,
                         e.first_reveal,
                         e.last_reveal,
-                        e.status,
+                        csv_escape(&e.status),
                         e.blocks_until_action
                             .map(|b| b.to_string())
                             .unwrap_or_default()

@@ -26,6 +26,7 @@ pub struct Client {
     inner: OnlineClient<SubtensorConfig>,
     rpc: LegacyRpcMethods<SubtensorConfig>,
     cache: QueryCache,
+    dry_run: bool,
 }
 
 impl Client {
@@ -44,7 +45,7 @@ impl Client {
             .await
             .with_context(|| "Failed to initialize subxt client from RPC connection")?;
         tracing::info!("Connected to {} in {:?}", url, start.elapsed());
-        Ok(Self { inner, rpc, cache: QueryCache::new() })
+        Ok(Self { inner, rpc, cache: QueryCache::new(), dry_run: false })
     }
 
     /// Connect to a subtensor node with retry + exponential backoff.
@@ -115,35 +116,65 @@ impl Client {
         Self::ss58_to_account_id(ss58)
     }
 
+    /// Enable dry-run mode: sign_submit will print a JSON preview instead of broadcasting.
+    pub fn set_dry_run(&mut self, enabled: bool) {
+        self.dry_run = enabled;
+    }
+
     /// Sign, submit, and wait for finalization of a typed extrinsic.
     /// Returns the extrinsic hash. Provides contextual error messages for common failures.
+    /// In dry-run mode, encodes the call data and returns a JSON preview without submitting.
     async fn sign_submit<T: subxt::tx::Payload>(
         &self,
         tx: &T,
         pair: &sr25519::Pair,
     ) -> Result<String> {
+        // Dry-run: encode the call and show what would be submitted
+        if self.dry_run {
+            let call_data = self
+                .inner
+                .tx()
+                .call_data(tx)
+                .map_err(|e| anyhow::anyhow!("Failed to encode call data: {}", e))?;
+            let signer_pub = sp_core::Pair::public(pair);
+            let signer_ss58 = crate::wallet::keypair::to_ss58(&signer_pub, 42);
+            let info = serde_json::json!({
+                "dry_run": true,
+                "signer": signer_ss58,
+                "call_data_hex": format!("0x{}", hex::encode(&call_data)),
+                "call_data_len": call_data.len(),
+            });
+            eprintln!("[dry-run] Transaction would be submitted by {} ({} bytes call data)",
+                signer_ss58, call_data.len());
+            crate::cli::helpers::print_json(&info);
+            return Ok("dry-run".to_string());
+        }
+
         let signer = Self::signer(pair);
         let start = std::time::Instant::now();
+        let spinner = crate::cli::helpers::spinner("Submitting transaction...");
         tracing::debug!("Submitting extrinsic");
         let progress = self
             .inner
             .tx()
             .sign_and_submit_then_watch_default(tx, &signer)
             .await
-            .map_err(format_submit_error)?;
+            .map_err(|e| { spinner.finish_and_clear(); format_submit_error(e) })?;
+        spinner.set_message("Waiting for finalization...");
         tracing::debug!("Extrinsic submitted, waiting for finalization");
         let result = tokio::time::timeout(
             std::time::Duration::from_secs(30),
             progress.wait_for_finalized_success(),
         )
         .await
-        .map_err(|_| anyhow::anyhow!(
+        .map_err(|_| { spinner.finish_and_clear(); anyhow::anyhow!(
             "Transaction timed out after 30s waiting for finalization. \
              The extrinsic may have been dropped from the pool \
              (insufficient balance, invalid state, or node not producing blocks)."
-        ))?
-        .map_err(format_dispatch_error)?;
+        )})?
+        .map_err(|e| { spinner.finish_and_clear(); format_dispatch_error(e) })?;
         let hash = format!("{:?}", result.extrinsic_hash());
+        spinner.finish_and_clear();
         tracing::info!(tx_hash = %hash, elapsed_ms = start.elapsed().as_millis() as u64, "Extrinsic finalized");
         Ok(hash)
     }

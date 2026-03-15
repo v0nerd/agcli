@@ -338,6 +338,7 @@ pub(super) async fn handle_multisig(
     wallet_name: &str,
     network: &crate::types::Network,
     password: Option<&str>,
+    dry_run: bool,
 ) -> Result<()> {
     match cmd {
         MultisigCommands::Address {
@@ -380,7 +381,8 @@ pub(super) async fn handle_multisig(
             call,
             args,
         } => {
-            let client = Client::connect_network(network).await?;
+            let mut client = Client::connect_network(network).await?;
+            client.set_dry_run(dry_run);
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
             unlock_coldkey(&mut wallet, password)?;
             let other_ids = parse_sorted_signatories(&others)?;
@@ -421,7 +423,8 @@ pub(super) async fn handle_multisig(
             threshold,
             call_hash,
         } => {
-            let client = Client::connect_network(network).await?;
+            let mut client = Client::connect_network(network).await?;
+            client.set_dry_run(dry_run);
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
             unlock_coldkey(&mut wallet, password)?;
             let other_ids = parse_sorted_signatories(&others)?;

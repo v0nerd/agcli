@@ -33,6 +33,7 @@ pub fn explain(topic: &str) -> Option<&'static str> {
         "pow" | "powregistration" | "proofofwork" => Some(POW_REGISTRATION),
         "archive" | "archivenode" | "historical" | "wayback" => Some(ARCHIVE),
         "diff" | "compare" | "historicaldiff" => Some(DIFF),
+        "ownerworkflow" | "ow" | "subnetowner" | "ownerguide" => Some(OWNER_WORKFLOW),
         topics => {
             // Fuzzy: check if the topic is a substring of any key
             let all = list_topics();
@@ -79,6 +80,7 @@ pub fn list_topics() -> Vec<(&'static str, &'static str)> {
         ("pow", "Proof-of-work registration mechanics"),
         ("archive", "Archive nodes and historical data queries"),
         ("diff", "Compare chain state between two blocks"),
+        ("owner-workflow", "Step-by-step guide for subnet owners"),
     ]
 }
 
@@ -923,3 +925,114 @@ Tips:
   then drill into specific blocks with diff commands.
 - Queries run in parallel (block1 and block2 fetched concurrently).
 - See also: `agcli explain archive` for archive node setup.";
+
+const OWNER_WORKFLOW: &str = "\
+SUBNET OWNER WORKFLOW
+=====================
+Complete guide for registering, configuring, and managing a subnet with agcli.
+
+PHASE 1: PREPARATION
+---------------------
+  # Check current registration cost
+  agcli view network
+
+  # Ensure your wallet has enough TAO for registration lock
+  agcli balance
+
+  # Understand key concepts first
+  agcli explain subnet
+  agcli explain hyperparams
+
+PHASE 2: REGISTER YOUR SUBNET
+-------------------------------
+  # Register a new subnet (costs the current subnet lock amount)
+  agcli subnet register
+
+  # Note the netuid printed in the output — you'll use it everywhere.
+
+  # Set on-chain identity (helps validators and miners find you)
+  agcli identity set-subnet --netuid <N> --name 'My Subnet' --github 'https://github.com/...'
+
+PHASE 3: CONFIGURE HYPERPARAMETERS
+------------------------------------
+  # View current hyperparameters
+  agcli subnet hyperparams --netuid <N>
+
+  # List all settable parameters
+  agcli subnet set-param --netuid <N> --param list
+
+  # Common initial configuration:
+  agcli subnet set-param --netuid <N> --param tempo --value 360
+  agcli subnet set-param --netuid <N> --param max_allowed_uids --value 256
+  agcli subnet set-param --netuid <N> --param immunity_period --value 4096
+  agcli subnet set-param --netuid <N> --param min_allowed_weights --value 1
+  agcli subnet set-param --netuid <N> --param max_allowed_validators --value 64
+  agcli subnet set-param --netuid <N> --param registration_allowed --value true
+  agcli subnet set-param --netuid <N> --param weights_rate_limit --value 100
+
+  # Enable commit-reveal for weight privacy
+  agcli subnet set-param --netuid <N> --param commit_reveal_weights_enabled --value true
+  agcli subnet set-param --netuid <N> --param commit_reveal_period --value 1
+
+  # Enable liquid alpha for dynamic incentives
+  agcli subnet set-param --netuid <N> --param liquid_alpha_enabled --value true
+
+PHASE 4: MONITOR YOUR SUBNET
+------------------------------
+  # Watch live tempo countdown and rate limits
+  agcli subnet watch --netuid <N>
+
+  # Check metagraph: who's registered, their weights, stake
+  agcli subnet metagraph --netuid <N>
+
+  # Check health: miner status, weight coverage
+  agcli subnet health --netuid <N>
+
+  # Monitor registrations, weight changes, anomalies in real-time
+  agcli subnet monitor --netuid <N>
+
+  # View emission distribution across UIDs
+  agcli subnet emissions --netuid <N>
+
+  # Check current registration cost and difficulty trend
+  agcli subnet cost --netuid <N>
+
+  # Probe all miners' axon endpoints for health
+  agcli subnet probe --netuid <N>
+
+  # View pending weight commits
+  agcli subnet commits --netuid <N>
+
+PHASE 5: LIQUIDITY MANAGEMENT
+-------------------------------
+  # View AMM pool state for your subnet
+  agcli subnet liquidity --netuid <N>
+
+  # Toggle user liquidity participation
+  agcli liquidity toggle --netuid <N> --enable true
+
+  # Simulate a TAO-to-alpha swap to check pricing
+  agcli view swap-sim --netuid <N> --tao 100
+
+PHASE 6: ONGOING OPERATIONS
+-----------------------------
+  # Compare subnet state between blocks (track changes over time)
+  agcli diff subnet --netuid <N> --block1 <old> --block2 <new>
+
+  # Save metagraph snapshots for historical comparison
+  agcli subnet metagraph --netuid <N> --save
+  agcli subnet cache-diff --netuid <N>
+
+  # Subscribe to on-chain events for your subnet
+  agcli subscribe events --filter all --netuid <N>
+
+  # Security audit your account
+  agcli audit
+
+TIPS FOR OWNERS:
+- Use --dry-run on any write command to preview without submitting.
+- Use --output json for automation pipelines.
+- Set AGCLI_NETWORK=finney and AGCLI_WALLET=<name> in your shell profile.
+- Set-param shows the current value before confirming changes.
+- Run `agcli doctor` to verify connectivity and wallet health.
+- Use `agcli subnet monitor --netuid <N> --json` for structured event streaming.";

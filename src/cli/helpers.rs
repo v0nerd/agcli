@@ -3,6 +3,37 @@
 use crate::wallet::Wallet;
 use anyhow::Result;
 
+/// Escape a value for RFC 4180 CSV output.
+/// If the value contains a comma, double-quote, or newline, wrap it in double-quotes
+/// and escape any internal double-quotes by doubling them.
+pub fn csv_escape(val: &str) -> String {
+    if val.contains(',') || val.contains('"') || val.contains('\n') || val.contains('\r') {
+        let escaped = val.replace('"', "\"\"");
+        format!("\"{}\"", escaped)
+    } else {
+        val.to_string()
+    }
+}
+
+/// Join CSV fields with commas, escaping each field per RFC 4180.
+pub fn csv_row_from(fields: &[&str]) -> String {
+    fields.iter().map(|f| csv_escape(f)).collect::<Vec<_>>().join(",")
+}
+
+/// Create a styled spinner with a message, returns the ProgressBar handle.
+/// Caller should call `.finish_with_message()` or `.finish_and_clear()` when done.
+pub fn spinner(msg: &str) -> indicatif::ProgressBar {
+    let pb = indicatif::ProgressBar::new_spinner();
+    pb.set_style(
+        indicatif::ProgressStyle::with_template("{spinner:.cyan} {msg}")
+            .unwrap()
+            .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]),
+    );
+    pb.set_message(msg.to_string());
+    pb.enable_steady_tick(std::time::Duration::from_millis(80));
+    pb
+}
+
 pub fn open_wallet(wallet_dir: &str, wallet_name: &str) -> Result<Wallet> {
     let path = format!("{}/{}", wallet_dir, wallet_name);
     if !std::path::Path::new(&path).exists() {

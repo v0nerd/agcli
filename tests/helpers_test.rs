@@ -688,3 +688,88 @@ fn network_finney_not_archive() {
     assert!(!Network::Test.is_archive());
     assert!(!Network::Local.is_archive());
 }
+
+// ──── Sprint 14: CSV escaping ────
+
+#[test]
+fn csv_escape_plain_string() {
+    use agcli::cli::helpers::csv_escape;
+    assert_eq!(csv_escape("hello"), "hello");
+    assert_eq!(csv_escape("simple_name"), "simple_name");
+    assert_eq!(csv_escape("42"), "42");
+}
+
+#[test]
+fn csv_escape_with_comma() {
+    use agcli::cli::helpers::csv_escape;
+    assert_eq!(csv_escape("Subnet, Inc."), "\"Subnet, Inc.\"");
+}
+
+#[test]
+fn csv_escape_with_quotes() {
+    use agcli::cli::helpers::csv_escape;
+    assert_eq!(csv_escape("say \"hello\""), "\"say \"\"hello\"\"\"");
+}
+
+#[test]
+fn csv_escape_with_newline() {
+    use agcli::cli::helpers::csv_escape;
+    assert_eq!(csv_escape("line1\nline2"), "\"line1\nline2\"");
+}
+
+#[test]
+fn csv_escape_with_carriage_return() {
+    use agcli::cli::helpers::csv_escape;
+    assert_eq!(csv_escape("line1\rline2"), "\"line1\rline2\"");
+}
+
+#[test]
+fn csv_escape_with_all_special_chars() {
+    use agcli::cli::helpers::csv_escape;
+    let val = csv_escape("a,b\"c\nd");
+    assert!(val.starts_with('"') && val.ends_with('"'));
+    assert!(val.contains("\"\""));
+}
+
+#[test]
+fn csv_escape_empty_string() {
+    use agcli::cli::helpers::csv_escape;
+    assert_eq!(csv_escape(""), "");
+}
+
+#[test]
+fn csv_row_from_basic() {
+    use agcli::cli::helpers::csv_row_from;
+    assert_eq!(csv_row_from(&["a", "b", "c"]), "a,b,c");
+    assert_eq!(csv_row_from(&["Subnet, Inc.", "42"]), "\"Subnet, Inc.\",42");
+}
+
+// ──── Sprint 14: owner-workflow explain topic ────
+
+#[test]
+fn explain_owner_workflow_topic() {
+    let content = explain::explain("owner-workflow");
+    assert!(content.is_some(), "owner-workflow topic should exist");
+    let text = content.unwrap();
+    assert!(text.contains("SUBNET OWNER WORKFLOW"), "should have title");
+    assert!(text.contains("register"), "should mention registration");
+    assert!(text.contains("set-param"), "should mention set-param");
+    assert!(text.contains("monitor"), "should mention monitoring");
+}
+
+#[test]
+fn explain_owner_workflow_aliases() {
+    assert!(explain::explain("ow").is_some());
+    assert!(explain::explain("subnet-owner").is_some());
+    assert!(explain::explain("owner-guide").is_some());
+}
+
+#[test]
+fn explain_topic_count_31() {
+    let topics = explain::list_topics();
+    assert!(
+        topics.len() >= 31,
+        "Expected at least 31 topics, got {}",
+        topics.len()
+    );
+}

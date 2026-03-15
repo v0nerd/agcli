@@ -90,7 +90,7 @@ async fn handle_portfolio(client: &Client, addr: &str, output: &str) -> Result<(
                     format!(
                         "{},{},{},{},{},{:.6}",
                         p.netuid,
-                        p.subnet_name,
+                        csv_escape(&p.subnet_name),
                         p.hotkey_ss58,
                         p.alpha_stake,
                         p.tao_equivalent.rao(),
@@ -196,8 +196,8 @@ async fn handle_dynamic(client: &Client, output: &str) -> Result<()> {
             format!(
                 "{},{},{},{},{:.6},{},{},{},{},{}",
                 d.netuid,
-                d.name,
-                d.symbol,
+                csv_escape(&d.name),
+                csv_escape(&d.symbol),
                 d.tempo,
                 d.price,
                 d.tao_in.rao(),
@@ -310,8 +310,8 @@ async fn handle_dynamic_at_block(client: &Client, output: &str, block_num: u32) 
             format!(
                 "{},{},{},{},{:.6},{},{},{},{},{}",
                 d.netuid,
-                d.name,
-                d.symbol,
+                csv_escape(&d.name),
+                csv_escape(&d.symbol),
                 d.tempo,
                 d.price,
                 d.tao_in.rao(),
@@ -481,13 +481,13 @@ async fn handle_validators(
             "rank,hotkey,owner,take_pct,total_stake_rao,nominators,registrations",
             |(_, d)| {
                 format!(
-                    "{},{},{:.2},{},{},{:?}",
+                    "{},{},{:.2},{},{},{}",
                     d.hotkey,
                     d.owner,
                     d.take * 100.0,
                     d.total_stake.rao(),
                     d.nominators.len(),
-                    d.registrations
+                    csv_escape(&format!("{:?}", d.registrations))
                 )
             },
             &[
@@ -554,10 +554,10 @@ async fn handle_history(address: &str, output: &str, limit: usize) -> Result<()>
                         tx.get("extrinsic_hash")
                             .and_then(|v| v.as_str())
                             .unwrap_or(""),
-                        tx.get("call_module").and_then(|v| v.as_str()).unwrap_or(""),
-                        tx.get("call_module_function")
+                        csv_escape(tx.get("call_module").and_then(|v| v.as_str()).unwrap_or("")),
+                        csv_escape(tx.get("call_module_function")
                             .and_then(|v| v.as_str())
-                            .unwrap_or(""),
+                            .unwrap_or("")),
                         tx.get("success").and_then(|v| v.as_bool()).unwrap_or(false),
                         tx.get("block_timestamp")
                             .and_then(|v| v.as_u64())
