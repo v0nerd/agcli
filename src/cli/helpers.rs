@@ -335,8 +335,8 @@ pub fn json_to_subxt_value(v: &serde_json::Value) -> subxt::dynamic::Value {
             }
         }
         serde_json::Value::String(s) => {
-            if s.starts_with("0x") {
-                if let Ok(bytes) = hex::decode(s.strip_prefix("0x").unwrap()) {
+            if let Some(hex_str) = s.strip_prefix("0x") {
+                if let Ok(bytes) = hex::decode(hex_str) {
                     return Value::from_bytes(bytes);
                 }
             }

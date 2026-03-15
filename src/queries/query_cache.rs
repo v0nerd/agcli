@@ -54,10 +54,14 @@ impl QueryCache {
         F: FnOnce() -> Fut,
         Fut: std::future::Future<Output = anyhow::Result<Vec<SubnetInfo>>>,
     {
-        if let Some(cached) = self.subnets.get(&()) .await {
+        if let Some(cached) = self.subnets.get(&()).await {
+            tracing::debug!("cache hit: all_subnets");
             return Ok(cached);
         }
+        tracing::debug!("cache miss: all_subnets — fetching from chain");
+        let start = std::time::Instant::now();
         let data = Arc::new(fetch().await?);
+        tracing::debug!(elapsed_ms = start.elapsed().as_millis() as u64, count = data.len(), "fetched all_subnets");
         self.subnets.insert((), data.clone()).await;
         Ok(data)
     }
@@ -72,9 +76,13 @@ impl QueryCache {
         Fut: std::future::Future<Output = anyhow::Result<Vec<DynamicInfo>>>,
     {
         if let Some(cached) = self.all_dynamic.get(&()).await {
+            tracing::debug!("cache hit: all_dynamic_info");
             return Ok(cached);
         }
+        tracing::debug!("cache miss: all_dynamic_info — fetching from chain");
+        let start = std::time::Instant::now();
         let data = Arc::new(fetch().await?);
+        tracing::debug!(elapsed_ms = start.elapsed().as_millis() as u64, count = data.len(), "fetched all_dynamic_info");
         self.all_dynamic.insert((), data.clone()).await;
         // Also populate per-netuid cache
         for d in data.iter() {
@@ -96,10 +104,14 @@ impl QueryCache {
         Fut: std::future::Future<Output = anyhow::Result<Option<DynamicInfo>>>,
     {
         if let Some(cached) = self.dynamic_by_netuid.get(&netuid).await {
+            tracing::debug!(netuid, "cache hit: dynamic_info");
             return Ok(Some(cached));
         }
+        tracing::debug!(netuid, "cache miss: dynamic_info — fetching from chain");
+        let start = std::time::Instant::now();
         match fetch().await? {
             Some(data) => {
+                tracing::debug!(netuid, elapsed_ms = start.elapsed().as_millis() as u64, "fetched dynamic_info");
                 let arc = Arc::new(data);
                 self.dynamic_by_netuid.insert(netuid, arc.clone()).await;
                 Ok(Some(arc))

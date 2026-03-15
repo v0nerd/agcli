@@ -125,12 +125,15 @@ impl Client {
         pair: &sr25519::Pair,
     ) -> Result<String> {
         let signer = Self::signer(pair);
+        let start = std::time::Instant::now();
+        tracing::debug!("Submitting extrinsic");
         let progress = self
             .inner
             .tx()
             .sign_and_submit_then_watch_default(tx, &signer)
             .await
             .map_err(format_submit_error)?;
+        tracing::debug!("Extrinsic submitted, waiting for finalization");
         let result = tokio::time::timeout(
             std::time::Duration::from_secs(30),
             progress.wait_for_finalized_success(),
@@ -142,20 +145,25 @@ impl Client {
              (insufficient balance, invalid state, or node not producing blocks)."
         ))?
         .map_err(format_dispatch_error)?;
-        Ok(format!("{:?}", result.extrinsic_hash()))
+        let hash = format!("{:?}", result.extrinsic_hash());
+        tracing::info!(tx_hash = %hash, elapsed_ms = start.elapsed().as_millis() as u64, "Extrinsic finalized");
+        Ok(hash)
     }
 
     // ──────── Balance Queries ────────
 
     /// Get TAO balance (free) for an account.
     pub async fn get_balance(&self, account: &sr25519::Public) -> Result<Balance> {
+        let start = std::time::Instant::now();
         let account_id = Self::to_account_id(account);
         let addr = api::storage().system().account(&account_id);
         let info = self.inner.storage().at_latest().await?.fetch(&addr).await?;
-        match info {
-            Some(info) => Ok(Balance::from_rao(info.data.free)),
-            None => Ok(Balance::ZERO),
-        }
+        let balance = match info {
+            Some(info) => Balance::from_rao(info.data.free),
+            None => Balance::ZERO,
+        };
+        tracing::debug!(elapsed_ms = start.elapsed().as_millis() as u64, "get_balance");
+        Ok(balance)
     }
 
     /// Get TAO balance for an SS58 address.
@@ -273,6 +281,7 @@ impl Client {
 
     /// Get all stakes for a coldkey (via runtime API).
     pub async fn get_stake_for_coldkey(&self, coldkey_ss58: &str) -> Result<Vec<StakeInfo>> {
+        let start = std::time::Instant::now();
         let account_id = Self::ss58_to_account_id(coldkey_ss58)?;
         let payload = api::apis()
             .stake_info_runtime_api()
@@ -284,7 +293,9 @@ impl Client {
             .await?
             .call(payload)
             .await?;
-        Ok(result.into_iter().map(StakeInfo::from).collect())
+        let stakes: Vec<StakeInfo> = result.into_iter().map(StakeInfo::from).collect();
+        tracing::debug!(elapsed_ms = start.elapsed().as_millis() as u64, count = stakes.len(), "get_stake_for_coldkey");
+        Ok(stakes)
     }
 
     // ──────── Subnet Queries ────────

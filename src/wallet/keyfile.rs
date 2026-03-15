@@ -40,6 +40,7 @@ fn lock_keyfile(path: &Path) -> Result<fs::File> {
 
 /// Write mnemonic encrypted with password.
 pub fn write_encrypted_keyfile(path: &Path, mnemonic: &str, password: &str) -> Result<()> {
+    tracing::debug!(path = %path.display(), "Writing encrypted keyfile");
     let _lock = lock_keyfile(path)?;
 
     let mut salt = [0u8; SALT_LEN];
@@ -65,11 +66,19 @@ pub fn write_encrypted_keyfile(path: &Path, mnemonic: &str, password: &str) -> R
         fs::create_dir_all(parent)?;
     }
     fs::write(path, data).context("write keyfile")?;
+    // Set restrictive permissions (0600) on the keyfile
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(path, fs::Permissions::from_mode(0o600))
+            .with_context(|| format!("Failed to set permissions on '{}'", path.display()))?;
+    }
     Ok(())
 }
 
 /// Read and decrypt an encrypted keyfile, returning the mnemonic.
 pub fn read_encrypted_keyfile(path: &Path, password: &str) -> Result<String> {
+    tracing::debug!(path = %path.display(), "Reading encrypted keyfile");
     let data =
         fs::read(path).with_context(|| format!("Cannot read keyfile at '{}'", path.display()))?;
     if data.len() < SALT_LEN + NONCE_LEN {
@@ -97,6 +106,12 @@ pub fn write_keyfile(path: &Path, mnemonic: &str) -> Result<()> {
         fs::create_dir_all(parent)?;
     }
     fs::write(path, mnemonic).context("write keyfile")?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(path, fs::Permissions::from_mode(0o600))
+            .with_context(|| format!("Failed to set permissions on '{}'", path.display()))?;
+    }
     Ok(())
 }
 
@@ -112,6 +127,12 @@ pub fn write_public_key(path: &Path, public: &sr25519::Public) -> Result<()> {
         fs::create_dir_all(parent)?;
     }
     fs::write(path, hex::encode(public.0)).context("write public key")?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(path, fs::Permissions::from_mode(0o644))
+            .with_context(|| format!("Failed to set permissions on '{}'", path.display()))?;
+    }
     Ok(())
 }
 

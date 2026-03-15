@@ -31,15 +31,13 @@ pub fn classify(err: &anyhow::Error) -> i32 {
     // Walk the chain for typed errors
     for cause in err.chain() {
         // Network errors
-        if cause.downcast_ref::<reqwest::Error>().is_some() {
-            let re = cause.downcast_ref::<reqwest::Error>().unwrap();
+        if let Some(re) = cause.downcast_ref::<reqwest::Error>() {
             if re.is_timeout() {
                 return exit_code::TIMEOUT;
             }
             return exit_code::NETWORK;
         }
-        if cause.downcast_ref::<std::io::Error>().is_some() {
-            let io = cause.downcast_ref::<std::io::Error>().unwrap();
+        if let Some(io) = cause.downcast_ref::<std::io::Error>() {
             match io.kind() {
                 std::io::ErrorKind::NotFound
                 | std::io::ErrorKind::PermissionDenied

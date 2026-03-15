@@ -2307,16 +2307,16 @@ async fn handle_subnet_probe(
         .build()?;
 
     // Probe each axon endpoint concurrently
-    let results: Vec<ProbeResult> = stream::iter(probeable.iter().map(|n| {
+    let results: Vec<ProbeResult> = stream::iter(probeable.iter().filter_map(|n| {
+        let axon = n.axon_info.as_ref()?;
         let http = http_client.clone();
-        let axon = n.axon_info.as_ref().unwrap();
         let uid = n.uid;
         let hotkey = n.hotkey.clone();
         let ip = axon.ip.clone();
         let port = axon.port;
         let version = axon.version;
 
-        async move {
+        Some(async move {
             let url = format!("http://{}:{}/", ip, port);
             let start = Instant::now();
             let res = http.get(&url).send().await;
@@ -2351,7 +2351,7 @@ async fn handle_subnet_probe(
                     }
                 }
             }
-        }
+        })
     }))
     .buffer_unordered(concurrency)
     .collect()
@@ -3256,7 +3256,8 @@ async fn handle_subscribe(
             netuid,
             account,
         } => {
-            let f: crate::events::EventFilter = filter.parse().unwrap();
+            let f: crate::events::EventFilter = filter.parse()
+                .map_err(|e| anyhow::anyhow!("Invalid event filter '{}': {}", filter, e))?;
             crate::events::subscribe_events_filtered(
                 client.subxt(),
                 f,
