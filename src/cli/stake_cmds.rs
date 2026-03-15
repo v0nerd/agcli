@@ -424,6 +424,29 @@ pub async fn handle_stake(
             println!("Root claim type set. Tx: {}", hash);
             Ok(())
         }
+        StakeCommands::TransferStake {
+            dest,
+            amount,
+            from,
+            to,
+            hotkey,
+        } => {
+            let (pair, hk) =
+                unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, hotkey, password)?;
+            let amt = Balance::from_tao(amount);
+            println!(
+                "Transferring {:.4} TAO stake from SN{} to SN{} → {}",
+                amount,
+                from,
+                to,
+                crate::utils::short_ss58(&dest)
+            );
+            let hash = client
+                .transfer_stake(&pair, &dest, &hk, NetUid(from), NetUid(to), amt)
+                .await?;
+            println!("Stake transferred. Tx: {}", hash);
+            Ok(())
+        }
         StakeCommands::Wizard {
             netuid,
             amount,

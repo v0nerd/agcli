@@ -288,6 +288,7 @@ Alpha operations:
   agcli stake remove 10 --netuid 5      # alpha → TAO (unstake)
   agcli stake recycle-alpha 10 --netuid 5   # recycle alpha back to TAO
   agcli stake burn-alpha 10 --netuid 5      # permanently burn alpha (reduce supply)
+  agcli stake transfer-stake --dest <ss58> --amount 10 --from 5 --to 5  # transfer to another coldkey
 
 Key insight: alpha is always liquid through the AMM, but slippage matters on
 small pools. Use `agcli view swap-sim` to preview swap amounts.";

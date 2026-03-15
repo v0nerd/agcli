@@ -49,6 +49,14 @@ async fn main() {
     let cfg = agcli::Config::load();
     cli.apply_config(&cfg);
 
+    // Warn if password was passed via CLI flag (visible in process list)
+    if cli.password.is_some() && std::env::var("AGCLI_PASSWORD").is_err() {
+        eprintln!(
+            "Warning: password passed via --password flag is visible in `ps`. \
+             Prefer AGCLI_PASSWORD env var for security."
+        );
+    }
+
     let json_errors = cli.output == "json" || cli.batch;
     let show_time = cli.time;
     let timeout_secs = cli.timeout.filter(|&t| t > 0);

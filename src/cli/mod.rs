@@ -582,6 +582,24 @@ pub enum StakeCommands {
         #[arg(long)]
         subnets: Option<String>,
     },
+    /// Transfer stake to a different coldkey owner
+    TransferStake {
+        /// Destination coldkey SS58 address
+        #[arg(long)]
+        dest: String,
+        /// Amount of TAO to transfer
+        #[arg(long)]
+        amount: f64,
+        /// Source subnet UID
+        #[arg(long)]
+        from: u16,
+        /// Destination subnet UID
+        #[arg(long)]
+        to: u16,
+        /// Hotkey SS58
+        #[arg(long)]
+        hotkey: Option<String>,
+    },
     /// Full staking wizard (interactive or non-interactive with flags)
     Wizard {
         /// Subnet UID (skip interactive subnet selection)

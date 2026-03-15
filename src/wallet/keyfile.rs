@@ -115,8 +115,9 @@ pub fn write_keyfile(path: &Path, mnemonic: &str) -> Result<()> {
     Ok(())
 }
 
-/// Read a plaintext keyfile.
+/// Read a plaintext keyfile (acquires shared lock to avoid reading mid-write).
 pub fn read_keyfile(path: &Path) -> Result<String> {
+    let _lock = lock_keyfile(path).ok();
     fs::read_to_string(path).context("read keyfile")
 }
 

@@ -2612,3 +2612,61 @@ fn parse_subnet_set_param_value_is_optional() {
     ]);
     assert!(cli.is_ok(), "subnet set-param without --value should parse");
 }
+
+// ──── Sprint 11: transfer-stake CLI ────
+
+#[test]
+fn parse_stake_transfer_stake() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "stake",
+        "transfer-stake",
+        "--dest",
+        "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+        "--amount",
+        "10.5",
+        "--from",
+        "1",
+        "--to",
+        "2",
+        "--hotkey",
+        "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(
+        cli.is_ok(),
+        "should parse stake transfer-stake: {:?}",
+        cli.err()
+    );
+}
+
+#[test]
+fn parse_stake_transfer_stake_requires_dest() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "stake",
+        "transfer-stake",
+        "--amount",
+        "10",
+        "--from",
+        "1",
+        "--to",
+        "2",
+    ]);
+    assert!(cli.is_err(), "transfer-stake should require --dest");
+}
+
+#[test]
+fn parse_stake_transfer_stake_requires_amount() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "stake",
+        "transfer-stake",
+        "--dest",
+        "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+        "--from",
+        "1",
+        "--to",
+        "2",
+    ]);
+    assert!(cli.is_err(), "transfer-stake should require --amount");
+}
