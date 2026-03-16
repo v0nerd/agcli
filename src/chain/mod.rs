@@ -771,10 +771,17 @@ fn format_submit_error(e: subxt::Error) -> anyhow::Error {
     }
 }
 
-/// Decode raw "Custom error: N" codes from SubtensorModule into named errors.
+/// Decoded custom error: (name, human-readable description).
+struct DecodedError {
+    name: &'static str,
+    desc: &'static str,
+}
+
+/// Decode raw "Custom error: N" codes from SubtensorModule into named errors
+/// with human-readable descriptions.
 /// When subxt can't match compile-time metadata to the runtime, it returns
 /// numeric error indices instead of named variants.
-fn decode_custom_error(msg: &str) -> Option<&'static str> {
+fn decode_custom_error(msg: &str) -> Option<DecodedError> {
     // Extract the number from "Custom error: N" or "custom error: N"
     let lower = msg.to_lowercase();
     let idx = lower.find("custom error:")?;
@@ -782,152 +789,154 @@ fn decode_custom_error(msg: &str) -> Option<&'static str> {
     let num_str = after.trim().trim_matches(|c: char| !c.is_ascii_digit());
     let n: u32 = num_str.parse().ok()?;
     // SubtensorModule (pallet index 7) error enum — from chain metadata
-    match n {
-        0 => Some("RootNetworkDoesNotExist"),
-        1 => Some("InvalidIpType"),
-        2 => Some("InvalidIpAddress"),
-        3 => Some("InvalidPort"),
-        4 => Some("HotKeyNotRegisteredInSubNet"),
-        5 => Some("HotKeyAccountNotExists"),
-        6 => Some("HotKeyNotRegisteredInNetwork"),
-        7 => Some("NonAssociatedColdKey"),
-        8 => Some("NotEnoughStake"),
-        9 => Some("NotEnoughStakeToWithdraw"),
-        10 => Some("NotEnoughStakeToSetWeights"),
-        11 => Some("NotEnoughStakeToSetChildkeys"),
-        12 => Some("NotEnoughBalanceToStake"),
-        13 => Some("BalanceWithdrawalError"),
-        14 => Some("ZeroBalanceAfterWithdrawn"),
-        15 => Some("NeuronNoValidatorPermit"),
-        16 => Some("WeightVecNotEqualSize"),
-        17 => Some("DuplicateUids"),
-        18 => Some("UidVecContainInvalidOne"),
-        19 => Some("WeightVecLengthIsLow"),
-        20 => Some("TooManyRegistrationsThisBlock"),
-        21 => Some("HotKeyAlreadyRegisteredInSubNet"),
-        22 => Some("NewHotKeyIsSameWithOld"),
-        23 => Some("InvalidWorkBlock"),
-        24 => Some("InvalidDifficulty"),
-        25 => Some("InvalidSeal"),
-        26 => Some("MaxWeightExceeded"),
-        27 => Some("HotKeyAlreadyDelegate"),
-        28 => Some("SettingWeightsTooFast"),
-        29 => Some("IncorrectWeightVersionKey"),
-        30 => Some("ServingRateLimitExceeded"),
-        31 => Some("UidsLengthExceedUidsInSubNet"),
-        32 => Some("NetworkTxRateLimitExceeded"),
-        33 => Some("DelegateTxRateLimitExceeded"),
-        34 => Some("HotKeySetTxRateLimitExceeded"),
-        35 => Some("StakingRateLimitExceeded"),
-        36 => Some("SubNetRegistrationDisabled"),
-        37 => Some("TooManyRegistrationsThisInterval"),
-        38 => Some("TransactorAccountShouldBeHotKey"),
-        39 => Some("FaucetDisabled"),
-        40 => Some("NotSubnetOwner"),
-        41 => Some("RegistrationNotPermittedOnRootSubnet"),
-        42 => Some("StakeTooLowForRoot"),
-        43 => Some("AllNetworksInImmunity"),
-        44 => Some("NotEnoughBalanceToPaySwapHotKey"),
-        45 => Some("NotRootSubnet"),
-        46 => Some("CanNotSetRootNetworkWeights"),
-        47 => Some("NoNeuronIdAvailable"),
-        48 => Some("DelegateTakeTooLow"),
-        49 => Some("DelegateTakeTooHigh"),
-        50 => Some("NoWeightsCommitFound"),
-        51 => Some("InvalidRevealCommitHashNotMatch"),
-        52 => Some("CommitRevealEnabled"),
-        53 => Some("CommitRevealDisabled"),
-        54 => Some("LiquidAlphaDisabled"),
-        55 => Some("AlphaHighTooLow"),
-        56 => Some("AlphaLowOutOfRange"),
-        57 => Some("ColdKeyAlreadyAssociated"),
-        58 => Some("NotEnoughBalanceToPaySwapColdKey"),
-        59 => Some("InvalidChild"),
-        60 => Some("DuplicateChild"),
-        61 => Some("ProportionOverflow"),
-        62 => Some("TooManyChildren"),
-        63 => Some("TxRateLimitExceeded"),
-        64 => Some("ColdkeySwapAnnouncementNotFound"),
-        65 => Some("ColdkeySwapTooEarly"),
-        66 => Some("ColdkeySwapReannouncedTooEarly"),
-        67 => Some("AnnouncedColdkeyHashDoesNotMatch"),
-        68 => Some("ColdkeySwapAlreadyDisputed"),
-        69 => Some("NewColdKeyIsHotkey"),
-        70 => Some("InvalidChildkeyTake"),
-        71 => Some("TxChildkeyTakeRateLimitExceeded"),
-        72 => Some("InvalidIdentity"),
-        73 => Some("MechanismDoesNotExist"),
-        74 => Some("CannotUnstakeLock"),
-        75 => Some("SubnetNotExists"),
-        76 => Some("TooManyUnrevealedCommits"),
-        77 => Some("ExpiredWeightCommit"),
-        78 => Some("RevealTooEarly"),
-        79 => Some("InputLengthsUnequal"),
-        80 => Some("CommittingWeightsTooFast"),
-        81 => Some("AmountTooLow"),
-        82 => Some("InsufficientLiquidity"),
-        83 => Some("SlippageTooHigh"),
-        84 => Some("TransferDisallowed"),
-        85 => Some("ActivityCutoffTooLow"),
-        86 => Some("CallDisabled"),
-        87 => Some("FirstEmissionBlockNumberAlreadySet"),
-        88 => Some("NeedWaitingMoreBlocksToStarCall"),
-        89 => Some("NotEnoughAlphaOutToRecycle"),
-        90 => Some("CannotBurnOrRecycleOnRootSubnet"),
-        91 => Some("UnableToRecoverPublicKey"),
-        92 => Some("InvalidRecoveredPublicKey"),
-        93 => Some("SubtokenDisabled"),
-        94 => Some("HotKeySwapOnSubnetIntervalNotPassed"),
-        95 => Some("ZeroMaxStakeAmount"),
-        96 => Some("SameNetuid"),
-        97 => Some("InsufficientBalance"),
-        98 => Some("StakingOperationRateLimitExceeded"),
-        99 => Some("InvalidLeaseBeneficiary"),
-        100 => Some("LeaseCannotEndInThePast"),
-        101 => Some("LeaseNetuidNotFound"),
-        102 => Some("LeaseDoesNotExist"),
-        103 => Some("LeaseHasNoEndBlock"),
-        104 => Some("LeaseHasNotEnded"),
-        105 => Some("Overflow"),
-        106 => Some("BeneficiaryDoesNotOwnHotkey"),
-        107 => Some("ExpectedBeneficiaryOrigin"),
-        108 => Some("AdminActionProhibitedDuringWeightsWindow"),
-        109 => Some("SymbolDoesNotExist"),
-        110 => Some("SymbolAlreadyInUse"),
-        111 => Some("IncorrectCommitRevealVersion"),
-        112 => Some("RevealPeriodTooLarge"),
-        113 => Some("RevealPeriodTooSmall"),
-        114 => Some("InvalidValue"),
-        115 => Some("SubnetLimitReached"),
-        116 => Some("CannotAffordLockCost"),
-        117 => Some("EvmKeyAssociateRateLimitExceeded"),
-        118 => Some("SameAutoStakeHotkeyAlreadySet"),
-        119 => Some("UidMapCouldNotBeCleared"),
-        120 => Some("TrimmingWouldExceedMaxImmunePercentage"),
-        121 => Some("ChildParentInconsistency"),
-        122 => Some("InvalidNumRootClaim"),
-        123 => Some("InvalidRootClaimThreshold"),
-        124 => Some("InvalidSubnetNumber"),
-        125 => Some("TooManyUIDsPerMechanism"),
-        126 => Some("VotingPowerTrackingNotEnabled"),
-        127 => Some("InvalidVotingPowerEmaAlpha"),
-        128 => Some("PrecisionLoss"),
-        129 => Some("Deprecated"),
-        130 => Some("AddStakeBurnRateLimitExceeded"),
-        131 => Some("ColdkeySwapAnnounced"),
-        132 => Some("ColdkeySwapDisputed"),
-        _ => None,
-    }
+    let (name, desc) = match n {
+        0 => ("RootNetworkDoesNotExist", "The root network (SN0) does not exist on this chain"),
+        1 => ("InvalidIpType", "The IP type provided for axon serving is not valid (use 4 for IPv4 or 6 for IPv6)"),
+        2 => ("InvalidIpAddress", "The IP address provided is not a valid format"),
+        3 => ("InvalidPort", "The port number for axon serving is invalid (must be 1-65535)"),
+        4 => ("HotKeyNotRegisteredInSubNet", "This hotkey is not registered on the target subnet. Register with `agcli subnet register-neuron`"),
+        5 => ("HotKeyAccountNotExists", "This hotkey account does not exist on chain. It may need to be funded or registered first"),
+        6 => ("HotKeyNotRegisteredInNetwork", "This hotkey is not registered on any network. Register first with `agcli subnet register-neuron --netuid <N>`"),
+        7 => ("NonAssociatedColdKey", "This coldkey is not associated with the specified hotkey. Check your --wallet and --hotkey flags"),
+        8 => ("NotEnoughStake", "Insufficient stake for this operation. Check your stake with `agcli stake list`"),
+        9 => ("NotEnoughStakeToWithdraw", "Cannot unstake this amount — it exceeds your current stake. Check `agcli stake list`"),
+        10 => ("NotEnoughStakeToSetWeights", "Your stake is below the minimum required to set weights on this subnet"),
+        11 => ("NotEnoughStakeToSetChildkeys", "Your stake is below the minimum required to set childkeys"),
+        12 => ("NotEnoughBalanceToStake", "Your TAO balance is too low to stake this amount. Check `agcli balance`"),
+        13 => ("BalanceWithdrawalError", "Failed to withdraw balance — the chain could not complete the transfer"),
+        14 => ("ZeroBalanceAfterWithdrawn", "This operation would leave your account with zero balance, which is not allowed"),
+        15 => ("NeuronNoValidatorPermit", "This neuron does not have a validator permit on the subnet"),
+        16 => ("WeightVecNotEqualSize", "The UIDs and weights arrays must be the same length"),
+        17 => ("DuplicateUids", "Duplicate UIDs found in your weight submission — each UID must appear only once"),
+        18 => ("UidVecContainInvalidOne", "One or more UIDs are out of range for this subnet"),
+        19 => ("WeightVecLengthIsLow", "Too few weights provided — you must set weights for at least the minimum number of UIDs"),
+        20 => ("TooManyRegistrationsThisBlock", "Registration limit reached for this block. Wait ~12 seconds and try again"),
+        21 => ("HotKeyAlreadyRegisteredInSubNet", "This hotkey is already registered on the subnet"),
+        22 => ("NewHotKeyIsSameWithOld", "The new hotkey is the same as the current one — no change needed"),
+        23 => ("InvalidWorkBlock", "The PoW work block is invalid or too old"),
+        24 => ("InvalidDifficulty", "The PoW difficulty does not match the current requirement"),
+        25 => ("InvalidSeal", "The PoW seal/nonce solution is incorrect"),
+        26 => ("MaxWeightExceeded", "Total weight exceeds the maximum allowed (65535). Reduce individual weights"),
+        27 => ("HotKeyAlreadyDelegate", "This hotkey already has a delegate set"),
+        28 => ("SettingWeightsTooFast", "Weight-setting is rate-limited. Wait a few blocks before setting weights again"),
+        29 => ("IncorrectWeightVersionKey", "Wrong weight version key — the subnet may have updated its expected version"),
+        30 => ("ServingRateLimitExceeded", "Axon serving updates are rate-limited. Wait before updating your axon info"),
+        31 => ("UidsLengthExceedUidsInSubNet", "You submitted weights for more UIDs than exist on the subnet"),
+        32 => ("NetworkTxRateLimitExceeded", "Global transaction rate limit hit. Wait a few blocks before retrying"),
+        33 => ("DelegateTxRateLimitExceeded", "Delegate operations are rate-limited. Wait before modifying delegate settings"),
+        34 => ("HotKeySetTxRateLimitExceeded", "Hotkey update operations are rate-limited. Wait before retrying"),
+        35 => ("StakingRateLimitExceeded", "Staking operations are rate-limited. Wait a few blocks before staking again"),
+        36 => ("SubNetRegistrationDisabled", "Subnet registration is currently disabled by the subnet owner"),
+        37 => ("TooManyRegistrationsThisInterval", "Too many registrations in this interval. Wait for the next interval to retry"),
+        38 => ("TransactorAccountShouldBeHotKey", "This operation must be submitted by the hotkey account, not the coldkey"),
+        39 => ("FaucetDisabled", "The faucet is disabled on this network"),
+        40 => ("NotSubnetOwner", "You are not the owner of this subnet. Only the subnet owner can perform this action"),
+        41 => ("RegistrationNotPermittedOnRootSubnet", "Direct registration on the root subnet (SN0) is not allowed"),
+        42 => ("StakeTooLowForRoot", "Your total stake is too low to participate in the root network"),
+        43 => ("AllNetworksInImmunity", "All subnets are currently in their immunity period — no subnet can be replaced"),
+        44 => ("NotEnoughBalanceToPaySwapHotKey", "Insufficient balance to pay the hotkey swap fee"),
+        45 => ("NotRootSubnet", "This operation is only available on the root subnet (SN0)"),
+        46 => ("CanNotSetRootNetworkWeights", "Cannot set weights on the root network directly"),
+        47 => ("NoNeuronIdAvailable", "The subnet is full — no UID slots available. Wait for a slot to open or try a different subnet"),
+        48 => ("DelegateTakeTooLow", "Delegate take percentage is below the minimum allowed"),
+        49 => ("DelegateTakeTooHigh", "Delegate take percentage exceeds the maximum (11.11%)"),
+        50 => ("NoWeightsCommitFound", "No weight commit found to reveal. You must `agcli weights commit` before revealing"),
+        51 => ("InvalidRevealCommitHashNotMatch", "The reveal data does not match your previous commit hash"),
+        52 => ("CommitRevealEnabled", "This subnet uses commit-reveal for weights. Use `agcli weights commit` then `agcli weights reveal`"),
+        53 => ("CommitRevealDisabled", "Commit-reveal is not enabled on this subnet. Use `agcli weights set` directly"),
+        54 => ("LiquidAlphaDisabled", "Liquid alpha is not enabled on this subnet"),
+        55 => ("AlphaHighTooLow", "The alpha high parameter is set too low"),
+        56 => ("AlphaLowOutOfRange", "The alpha low parameter is outside the valid range"),
+        57 => ("ColdKeyAlreadyAssociated", "This coldkey is already associated with a hotkey"),
+        58 => ("NotEnoughBalanceToPaySwapColdKey", "Insufficient balance to pay the coldkey swap fee"),
+        59 => ("InvalidChild", "The specified childkey UID is invalid"),
+        60 => ("DuplicateChild", "Duplicate childkey UID — each child must appear only once"),
+        61 => ("ProportionOverflow", "Childkey proportions exceed 100% total"),
+        62 => ("TooManyChildren", "Too many childkeys — the maximum number of children has been reached"),
+        63 => ("TxRateLimitExceeded", "General transaction rate limit exceeded. Wait a few blocks before retrying"),
+        64 => ("ColdkeySwapAnnouncementNotFound", "No coldkey swap has been announced for this account"),
+        65 => ("ColdkeySwapTooEarly", "The coldkey swap was announced too recently. Wait for the cooldown period"),
+        66 => ("ColdkeySwapReannouncedTooEarly", "Cannot re-announce a coldkey swap yet — the minimum interval hasn't passed"),
+        67 => ("AnnouncedColdkeyHashDoesNotMatch", "The new coldkey does not match the one announced in the swap"),
+        68 => ("ColdkeySwapAlreadyDisputed", "This coldkey swap has been disputed and cannot be executed"),
+        69 => ("NewColdKeyIsHotkey", "The new coldkey address is already registered as a hotkey — use a different address"),
+        70 => ("InvalidChildkeyTake", "The childkey take value is invalid (must be 0-18%)"),
+        71 => ("TxChildkeyTakeRateLimitExceeded", "Childkey take changes are rate-limited. Wait before changing again"),
+        72 => ("InvalidIdentity", "One or more identity fields are invalid or exceed the maximum length"),
+        73 => ("MechanismDoesNotExist", "The specified mechanism does not exist on this subnet"),
+        74 => ("CannotUnstakeLock", "Cannot unstake during the lock period (subnet immunity or staking lock)"),
+        75 => ("SubnetNotExists", "This subnet ID does not exist. Check available subnets with `agcli subnet list`"),
+        76 => ("TooManyUnrevealedCommits", "Too many pending weight reveals. Reveal existing commits before creating new ones"),
+        77 => ("ExpiredWeightCommit", "Your weight commit has expired. Submit a new commit"),
+        78 => ("RevealTooEarly", "The reveal window is not open yet. Wait for the reveal period to begin"),
+        79 => ("InputLengthsUnequal", "Input arrays have different lengths — UIDs and values must match"),
+        80 => ("CommittingWeightsTooFast", "Weight commits are rate-limited. Wait before committing again"),
+        81 => ("AmountTooLow", "The amount is below the minimum threshold for this operation"),
+        82 => ("InsufficientLiquidity", "The liquidity pool does not have enough reserves for this trade"),
+        83 => ("SlippageTooHigh", "Price slippage exceeds the allowed maximum. Try a smaller amount or wait for better liquidity"),
+        84 => ("TransferDisallowed", "This transfer is not allowed by chain rules"),
+        85 => ("ActivityCutoffTooLow", "The activity cutoff parameter is below the minimum"),
+        86 => ("CallDisabled", "This operation is currently disabled on the chain"),
+        87 => ("FirstEmissionBlockNumberAlreadySet", "The emission start block has already been configured for this subnet"),
+        88 => ("NeedWaitingMoreBlocksToStarCall", "Not enough blocks have passed since subnet creation. Wait before starting emissions"),
+        89 => ("NotEnoughAlphaOutToRecycle", "Not enough alpha available to recycle"),
+        90 => ("CannotBurnOrRecycleOnRootSubnet", "Burn and recycle operations are not allowed on the root subnet (SN0)"),
+        91 => ("UnableToRecoverPublicKey", "Could not recover the public key from the provided signature"),
+        92 => ("InvalidRecoveredPublicKey", "The recovered public key does not match the expected account"),
+        93 => ("SubtokenDisabled", "The subtoken feature is not enabled on this subnet"),
+        94 => ("HotKeySwapOnSubnetIntervalNotPassed", "The minimum interval between hotkey swaps on this subnet has not passed"),
+        95 => ("ZeroMaxStakeAmount", "Maximum stake amount cannot be set to zero"),
+        96 => ("SameNetuid", "Source and destination subnet are the same — use different netuids"),
+        97 => ("InsufficientBalance", "Insufficient TAO balance for this operation. Check `agcli balance`"),
+        98 => ("StakingOperationRateLimitExceeded", "Staking operations are rate-limited. Wait a few blocks (~12s each) before retrying"),
+        99 => ("InvalidLeaseBeneficiary", "The lease beneficiary address is invalid"),
+        100 => ("LeaseCannotEndInThePast", "Lease end block must be in the future"),
+        101 => ("LeaseNetuidNotFound", "No lease found for this subnet ID"),
+        102 => ("LeaseDoesNotExist", "The specified lease does not exist"),
+        103 => ("LeaseHasNoEndBlock", "This lease is open-ended and cannot be ended by block number"),
+        104 => ("LeaseHasNotEnded", "The lease has not ended yet — wait for the lease end block"),
+        105 => ("Overflow", "Arithmetic overflow — try a smaller amount"),
+        106 => ("BeneficiaryDoesNotOwnHotkey", "The beneficiary account does not own the specified hotkey"),
+        107 => ("ExpectedBeneficiaryOrigin", "This call must be made by the beneficiary account"),
+        108 => ("AdminActionProhibitedDuringWeightsWindow", "Admin changes are blocked during the weights setting window. Try after the current tempo"),
+        109 => ("SymbolDoesNotExist", "The specified token symbol does not exist"),
+        110 => ("SymbolAlreadyInUse", "This token symbol is already taken. Choose a different symbol"),
+        111 => ("IncorrectCommitRevealVersion", "The commit-reveal version does not match. The subnet may have changed its protocol"),
+        112 => ("RevealPeriodTooLarge", "The reveal period is too long"),
+        113 => ("RevealPeriodTooSmall", "The reveal period is too short"),
+        114 => ("InvalidValue", "The provided value is invalid for this parameter"),
+        115 => ("SubnetLimitReached", "The maximum number of subnets has been reached — no new subnets can be created"),
+        116 => ("CannotAffordLockCost", "Insufficient balance to pay the subnet creation lock cost. Check `agcli subnet cost`"),
+        117 => ("EvmKeyAssociateRateLimitExceeded", "EVM key association is rate-limited. Wait before retrying"),
+        118 => ("SameAutoStakeHotkeyAlreadySet", "Auto-stake is already set to this hotkey — no change needed"),
+        119 => ("UidMapCouldNotBeCleared", "Internal error: UID map cleanup failed"),
+        120 => ("TrimmingWouldExceedMaxImmunePercentage", "Trimming would cause immune neurons to exceed the maximum allowed percentage"),
+        121 => ("ChildParentInconsistency", "Childkey parent relationship is inconsistent"),
+        122 => ("InvalidNumRootClaim", "Invalid number of root claims"),
+        123 => ("InvalidRootClaimThreshold", "The root claim threshold is invalid"),
+        124 => ("InvalidSubnetNumber", "The subnet number is invalid"),
+        125 => ("TooManyUIDsPerMechanism", "Too many UIDs assigned to a single mechanism"),
+        126 => ("VotingPowerTrackingNotEnabled", "Voting power tracking is not enabled on this subnet"),
+        127 => ("InvalidVotingPowerEmaAlpha", "The voting power EMA alpha parameter is invalid"),
+        128 => ("PrecisionLoss", "Calculation would lose too much precision — try a different amount"),
+        129 => ("Deprecated", "This feature has been deprecated and is no longer available"),
+        130 => ("AddStakeBurnRateLimitExceeded", "Add-stake-burn operations are rate-limited. Wait a few blocks before retrying"),
+        131 => ("ColdkeySwapAnnounced", "A coldkey swap is already announced for this account"),
+        132 => ("ColdkeySwapDisputed", "This coldkey swap has been disputed"),
+        _ => return None,
+    };
+    Some(DecodedError { name, desc })
 }
 
 /// Format dispatch errors (tx reached chain but execution failed) with contextual hints.
 fn format_dispatch_error(e: subxt::Error) -> anyhow::Error {
     let raw_msg = e.to_string();
     // If the error is a raw "Custom error: N", decode it so the named-error matchers below work.
-    let msg = if let Some(name) = decode_custom_error(&raw_msg) {
-        format!("{} [decoded: {}]", raw_msg, name)
+    // The decoded description provides the user-friendly explanation.
+    let (msg, decoded_desc) = if let Some(decoded) = decode_custom_error(&raw_msg) {
+        (format!("{} [{}]", raw_msg, decoded.name), Some(decoded.desc))
     } else {
-        raw_msg
+        (raw_msg, None)
     };
     // Map common SubtensorModule errors to helpful messages
     let hint = if msg.contains("NotEnoughBalanceToStake") || msg.contains("NotEnoughStake") {
@@ -1018,10 +1027,16 @@ fn format_dispatch_error(e: subxt::Error) -> anyhow::Error {
         "" // no special hint
     };
 
-    if hint.is_empty() {
-        anyhow::anyhow!("Transaction failed on chain: {}", msg)
-    } else {
+    // Build the error message with all available context:
+    // 1. The decoded human-readable description (from error code mapping)
+    // 2. The hint (from pattern matching on known error types)
+    // 3. The raw error message for debugging
+    if !hint.is_empty() {
         anyhow::anyhow!("Transaction failed: {}\n  Hint: {}", msg, hint)
+    } else if let Some(desc) = decoded_desc {
+        anyhow::anyhow!("Transaction failed: {}\n  Reason: {}", msg, desc)
+    } else {
+        anyhow::anyhow!("Transaction failed on chain: {}", msg)
     }
 }
 
@@ -1138,68 +1153,67 @@ mod tests {
 
     #[test]
     fn decode_custom_error_6() {
-        assert_eq!(
-            decode_custom_error("Custom error: 6"),
-            Some("HotKeyNotRegisteredInNetwork")
-        );
+        let d = decode_custom_error("Custom error: 6").expect("should decode 6");
+        assert_eq!(d.name, "HotKeyNotRegisteredInNetwork");
+        assert!(!d.desc.is_empty(), "should have a description");
     }
 
     #[test]
     fn decode_custom_error_20() {
-        assert_eq!(
-            decode_custom_error("Custom error: 20"),
-            Some("TooManyRegistrationsThisBlock")
-        );
+        let d = decode_custom_error("Custom error: 20").expect("should decode 20");
+        assert_eq!(d.name, "TooManyRegistrationsThisBlock");
     }
 
     #[test]
     fn decode_custom_error_21() {
-        assert_eq!(
-            decode_custom_error("Custom error: 21"),
-            Some("HotKeyAlreadyRegisteredInSubNet")
-        );
+        let d = decode_custom_error("Custom error: 21").expect("should decode 21");
+        assert_eq!(d.name, "HotKeyAlreadyRegisteredInSubNet");
     }
 
     #[test]
     fn decode_custom_error_unknown_index() {
-        assert_eq!(decode_custom_error("Custom error: 999"), None);
+        assert!(decode_custom_error("Custom error: 999").is_none());
     }
 
     #[test]
     fn decode_custom_error_59_invalidchild() {
-        assert_eq!(
-            decode_custom_error("Custom error: 59"),
-            Some("InvalidChild")
-        );
+        let d = decode_custom_error("Custom error: 59").expect("should decode 59");
+        assert_eq!(d.name, "InvalidChild");
     }
 
     #[test]
     fn decode_custom_error_97_insufficientbalance() {
-        assert_eq!(
-            decode_custom_error("Custom error: 97"),
-            Some("InsufficientBalance")
-        );
+        let d = decode_custom_error("Custom error: 97").expect("should decode 97");
+        assert_eq!(d.name, "InsufficientBalance");
     }
 
     #[test]
     fn decode_custom_error_98_staking_rate_limit() {
-        assert_eq!(
-            decode_custom_error("Custom error: 98"),
-            Some("StakingOperationRateLimitExceeded")
-        );
+        let d = decode_custom_error("Custom error: 98").expect("should decode 98");
+        assert_eq!(d.name, "StakingOperationRateLimitExceeded");
     }
 
     #[test]
     fn decode_custom_error_132_coldkey_disputed() {
-        assert_eq!(
-            decode_custom_error("Custom error: 132"),
-            Some("ColdkeySwapDisputed")
-        );
+        let d = decode_custom_error("Custom error: 132").expect("should decode 132");
+        assert_eq!(d.name, "ColdkeySwapDisputed");
     }
 
     #[test]
     fn decode_custom_error_no_match() {
-        assert_eq!(decode_custom_error("some other error text"), None);
+        assert!(decode_custom_error("some other error text").is_none());
+    }
+
+    #[test]
+    fn decode_custom_error_all_have_descriptions() {
+        // Verify every error code 0-132 has a non-empty description
+        for i in 0..=132u32 {
+            let msg = format!("Custom error: {}", i);
+            let d = decode_custom_error(&msg)
+                .unwrap_or_else(|| panic!("error {} should decode", i));
+            assert!(!d.name.is_empty(), "error {} should have a name", i);
+            assert!(!d.desc.is_empty(), "error {} ({}) should have a description", i, d.name);
+        }
     }
 
     #[test]

@@ -18,18 +18,39 @@ async fn main() {
     let out_dir = env::var_os("OUT_DIR").unwrap();
     let metadata_path = Path::new(&out_dir).join("metadata.rs");
 
+    // If metadata already exists and SKIP_METADATA_FETCH is set, reuse it
+    if metadata_path.exists() {
+        if env::var("SKIP_METADATA_FETCH").is_ok() {
+            eprintln!("agcli: reusing cached metadata (SKIP_METADATA_FETCH set)");
+            return;
+        }
+    }
+
     eprintln!("agcli: fetching chain metadata from {endpoint}...");
 
     // Try V15 first (subxt 0.38 compatible), fall back to V14
     let url = endpoint.as_str().try_into().unwrap();
-    let metadata_bytes = match fetch_metadata::from_url(url, MetadataVersion::Version(15)).await {
-        Ok(bytes) => bytes,
+    let fetch_result = match fetch_metadata::from_url(url, MetadataVersion::Version(15)).await {
+        Ok(bytes) => Ok(bytes),
         Err(e) => {
             eprintln!("agcli: V15 failed ({e}), trying V14...");
             let url = endpoint.as_str().try_into().unwrap();
-            fetch_metadata::from_url(url, MetadataVersion::Version(14))
-                .await
-                .unwrap()
+            fetch_metadata::from_url(url, MetadataVersion::Version(14)).await
+        }
+    };
+
+    let metadata_bytes = match fetch_result {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            // If fetch fails but we have cached metadata, reuse it
+            if metadata_path.exists() {
+                eprintln!(
+                    "agcli: metadata fetch failed ({e}), reusing cached metadata at {}",
+                    metadata_path.display()
+                );
+                return;
+            }
+            panic!("Failed to fetch metadata and no cache available: {e}");
         }
     };
 

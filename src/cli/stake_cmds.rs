@@ -133,6 +133,7 @@ pub async fn handle_stake(cmd: StakeCommands, client: &Client, ctx: &Ctx<'_>) ->
                 client
                     .add_stake_mev(&pair, &hk, NetUid(netuid), bal, mev)
                     .await,
+                &format!("Staked {} on SN{}", bal.display_tao(), netuid),
             )
         }
         StakeCommands::Remove {
@@ -151,14 +152,18 @@ pub async fn handle_stake(cmd: StakeCommands, client: &Client, ctx: &Ctx<'_>) ->
                 eprintln!("MEV shield: encrypting unstake operation");
                 tracing::info!("MEV shield: encrypting unstake operation");
             }
-            stake_op(
-                "Removing",
-                "removed",
-                &hk,
-                client
-                    .remove_stake_mev(&pair, &hk, NetUid(netuid), Balance::from_tao(amount), mev)
-                    .await,
-            )
+            {
+                let bal = Balance::from_tao(amount);
+                stake_op(
+                    "Removing",
+                    "removed",
+                    &hk,
+                    client
+                        .remove_stake_mev(&pair, &hk, NetUid(netuid), bal, mev)
+                        .await,
+                    &format!("Unstaked {} from SN{}", bal.display_tao(), netuid),
+                )
+            }
         }
         StakeCommands::Move {
             amount,
@@ -168,20 +173,24 @@ pub async fn handle_stake(cmd: StakeCommands, client: &Client, ctx: &Ctx<'_>) ->
         } => {
             let (pair, hk) =
                 unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, hotkey, password)?;
-            stake_op(
-                "Moving",
-                "moved",
-                &hk,
-                client
-                    .move_stake(
-                        &pair,
-                        &hk,
-                        NetUid(from),
-                        NetUid(to),
-                        Balance::from_tao(amount),
-                    )
-                    .await,
-            )
+            {
+                let bal = Balance::from_tao(amount);
+                stake_op(
+                    "Moving",
+                    "moved",
+                    &hk,
+                    client
+                        .move_stake(
+                            &pair,
+                            &hk,
+                            NetUid(from),
+                            NetUid(to),
+                            bal,
+                        )
+                        .await,
+                    &format!("Moved {} from SN{} to SN{}", bal.display_tao(), from, to),
+                )
+            }
         }
         StakeCommands::Swap {
             amount,
@@ -208,7 +217,10 @@ pub async fn handle_stake(cmd: StakeCommands, client: &Client, ctx: &Ctx<'_>) ->
                     bal,
                 )
                 .await?;
-            println!("Stake swapped. Tx: {}", hash);
+            println!(
+                "Stake swapped. {} moved between hotkeys on SN{}\n  Tx: {}",
+                bal.display_tao(), netuid, hash
+            );
             Ok(())
         }
         StakeCommands::UnstakeAll { hotkey } => {
@@ -216,16 +228,17 @@ pub async fn handle_stake(cmd: StakeCommands, client: &Client, ctx: &Ctx<'_>) ->
                 unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, hotkey, password)?;
             stake_op(
                 "Unstaking all from",
-                "removed",
+                "unstaked",
                 &hk,
                 client.unstake_all(&pair, &hk).await,
+                "All stake removed from this hotkey",
             )
         }
         StakeCommands::ClaimRoot { hotkey: _, netuid } => {
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
             unlock_coldkey(&mut wallet, password)?;
             let hash = client.claim_root(wallet.coldkey()?, &[netuid]).await?;
-            println!("Root claimed for SN{}. Tx: {}", netuid, hash);
+            println!("Root dividends claimed for SN{}.\n  Tx: {}", netuid, hash);
             Ok(())
         }
         StakeCommands::AddLimit {
@@ -249,7 +262,10 @@ pub async fn handle_stake(cmd: StakeCommands, client: &Client, ctx: &Ctx<'_>) ->
             let hash = client
                 .add_stake_limit(&pair, &hk, NetUid(netuid), bal, lp, partial)
                 .await?;
-            println!("Limit stake added. Tx: {}", hash);
+            println!(
+                "Limit stake order placed. {} at price {:.4} on SN{} (partial={})\n  Tx: {}",
+                bal.display_tao(), price, netuid, partial, hash
+            );
             Ok(())
         }
         StakeCommands::RemoveLimit {
@@ -270,7 +286,10 @@ pub async fn handle_stake(cmd: StakeCommands, client: &Client, ctx: &Ctx<'_>) ->
             let hash = client
                 .remove_stake_limit(&pair, &hk, NetUid(netuid), amt, lp, partial)
                 .await?;
-            println!("Limit stake removed. Tx: {}", hash);
+            println!(
+                "Limit stake order removed. {:.4} at price {:.4} on SN{}\n  Tx: {}",
+                amount, price, netuid, hash
+            );
             Ok(())
         }
         StakeCommands::ChildkeyTake {
@@ -290,7 +309,10 @@ pub async fn handle_stake(cmd: StakeCommands, client: &Client, ctx: &Ctx<'_>) ->
             let hash = client
                 .set_childkey_take(&pair, &hk, NetUid(netuid), take_u16)
                 .await?;
-            println!("Childkey take set. Tx: {}", hash);
+            println!(
+                "Childkey take set to {:.2}% on SN{}.\n  Tx: {}",
+                take, netuid, hash
+            );
             Ok(())
         }
         StakeCommands::SetChildren { netuid, children } => {
@@ -306,7 +328,10 @@ pub async fn handle_stake(cmd: StakeCommands, client: &Client, ctx: &Ctx<'_>) ->
             let hash = client
                 .set_children(&pair, &hk, NetUid(netuid), &children_parsed)
                 .await?;
-            println!("Children set. Tx: {}", hash);
+            println!(
+                "{} children set on SN{}.\n  Tx: {}",
+                children_parsed.len(), netuid, hash
+            );
             Ok(())
         }
         StakeCommands::RecycleAlpha {
@@ -323,6 +348,7 @@ pub async fn handle_stake(cmd: StakeCommands, client: &Client, ctx: &Ctx<'_>) ->
                 client
                     .recycle_alpha(&pair, &hk, NetUid(netuid), (amount * 1e9) as u64)
                     .await,
+                &format!("Recycled {:.4} alpha on SN{}", amount, netuid),
             )
         }
         StakeCommands::UnstakeAllAlpha { hotkey } => {
@@ -333,6 +359,7 @@ pub async fn handle_stake(cmd: StakeCommands, client: &Client, ctx: &Ctx<'_>) ->
                 "unstaked",
                 &hk,
                 client.unstake_all_alpha(&pair, &hk).await,
+                "All alpha unstaked from this hotkey",
             )
         }
         StakeCommands::BurnAlpha {
@@ -349,6 +376,7 @@ pub async fn handle_stake(cmd: StakeCommands, client: &Client, ctx: &Ctx<'_>) ->
                 client
                     .burn_alpha(&pair, &hk, (amount * 1e9) as u64, NetUid(netuid))
                     .await,
+                &format!("Burned {:.4} alpha on SN{} (permanently destroyed)", amount, netuid),
             )
         }
         StakeCommands::SwapLimit {
@@ -370,7 +398,10 @@ pub async fn handle_stake(cmd: StakeCommands, client: &Client, ctx: &Ctx<'_>) ->
             let hash = client
                 .swap_stake_limit(&pair, &hk, NetUid(from), NetUid(to), amt, lp, partial)
                 .await?;
-            println!("Swap limit submitted. Tx: {}", hash);
+            println!(
+                "Swap limit submitted. {:.4} from SN{} to SN{} at price {:.4}\n  Tx: {}",
+                amount, from, to, price, hash
+            );
             Ok(())
         }
         StakeCommands::SetAuto { netuid, hotkey } => {
@@ -382,7 +413,10 @@ pub async fn handle_stake(cmd: StakeCommands, client: &Client, ctx: &Ctx<'_>) ->
                 crate::utils::short_ss58(&hk)
             );
             let hash = client.set_auto_stake(&pair, NetUid(netuid), &hk).await?;
-            println!("Auto-stake set. Tx: {}", hash);
+            println!(
+                "Auto-stake configured. SN{} emissions will auto-stake to {}\n  Tx: {}",
+                netuid, crate::utils::short_ss58(&hk), hash
+            );
             Ok(())
         }
         StakeCommands::ShowAuto { address } => {
@@ -453,7 +487,14 @@ pub async fn handle_stake(cmd: StakeCommands, client: &Client, ctx: &Ctx<'_>) ->
             let hash = client
                 .set_root_claim_type(&pair, &claim_type, keep_subnets)
                 .await?;
-            println!("Root claim type set. Tx: {}", hash);
+            println!(
+                "Root claim type set to '{}'{}.\n  Tx: {}",
+                claim_type,
+                keep_subnets
+                    .map(|s| format!(" for subnets {:?}", s))
+                    .unwrap_or_default(),
+                hash
+            );
             Ok(())
         }
         StakeCommands::TransferStake {
@@ -476,7 +517,10 @@ pub async fn handle_stake(cmd: StakeCommands, client: &Client, ctx: &Ctx<'_>) ->
             let hash = client
                 .transfer_stake(&pair, &dest, &hk, NetUid(from), NetUid(to), amt)
                 .await?;
-            println!("Stake transferred. Tx: {}", hash);
+            println!(
+                "Stake transferred. {:.4} TAO from SN{} to SN{}, destination: {}\n  Tx: {}",
+                amount, from, to, crate::utils::short_ss58(&dest), hash
+            );
             Ok(())
         }
         StakeCommands::ProcessClaim { hotkey, netuids } => {
@@ -564,11 +608,21 @@ pub async fn handle_stake(cmd: StakeCommands, client: &Client, ctx: &Ctx<'_>) ->
     }
 }
 
-/// Common pattern for stake operations: print action, handle result.
-fn stake_op(action: &str, past: &str, hotkey: &str, result: Result<String>) -> Result<()> {
+/// Common pattern for stake operations: print action, handle result with context.
+fn stake_op(
+    action: &str,
+    past: &str,
+    hotkey: &str,
+    result: Result<String>,
+    detail: &str,
+) -> Result<()> {
     println!("{} {}", action, crate::utils::short_ss58(hotkey));
     let hash = result?;
-    println!("Stake {}. Tx: {}", past, hash);
+    if detail.is_empty() {
+        println!("Stake {}. Tx: {}", past, hash);
+    } else {
+        println!("Stake {}. {}\n  Tx: {}", past, detail, hash);
+    }
     Ok(())
 }
 

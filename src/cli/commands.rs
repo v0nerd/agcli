@@ -297,7 +297,11 @@ pub async fn execute(cli: Cli) -> Result<()> {
                 }
             }
             let hash = client.transfer(wallet.coldkey()?, &dest, balance).await?;
-            print_tx_result(ctx.output, &hash, "Transaction submitted.");
+            print_tx_result(
+                ctx.output,
+                &hash,
+                &format!("Transferred {} to {}", balance.display_tao(), crate::utils::short_ss58(&dest)),
+            );
             Ok(())
         }
         Commands::TransferAll { dest, keep_alive } => {
@@ -322,7 +326,11 @@ pub async fn execute(cli: Cli) -> Result<()> {
             let hash = client
                 .transfer_all(wallet.coldkey()?, &dest, keep_alive)
                 .await?;
-            print_tx_result(ctx.output, &hash, "All balance transferred.");
+            print_tx_result(
+                ctx.output,
+                &hash,
+                &format!("All balance transferred to {}", crate::utils::short_ss58(&dest)),
+            );
             Ok(())
         }
         Commands::Stake(cmd) => {

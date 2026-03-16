@@ -187,7 +187,7 @@ pub(super) async fn handle_weights(
             let hash = client
                 .set_weights(wallet.hotkey()?, NetUid(netuid), &uids, &wts, version_key)
                 .await?;
-            println!("Weights set. Tx: {}", hash);
+            println!("Weights set on SN{} ({} UIDs, version_key={}).\n  Tx: {}", netuid, uids.len(), version_key, hash);
             Ok(())
         }
         WeightCommands::Commit {
@@ -218,7 +218,7 @@ pub(super) async fn handle_weights(
             let hash = client
                 .commit_weights(wallet.hotkey()?, NetUid(netuid), hash_out)
                 .await?;
-            println!("Weights committed. Tx: {}", hash);
+            println!("Weights committed on SN{}. Save your salt for reveal: {}\n  Tx: {}", netuid, salt_str, hash);
             Ok(())
         }
         WeightCommands::Reveal {
@@ -256,7 +256,7 @@ pub(super) async fn handle_weights(
                     version_key,
                 )
                 .await?;
-            println!("Weights revealed. Tx: {}", hash);
+            println!("Weights revealed on SN{} ({} UIDs).\n  Tx: {}", netuid, uids.len(), hash);
             Ok(())
         }
         WeightCommands::CommitReveal {

@@ -482,7 +482,7 @@ pub(super) async fn handle_subnet(
                 unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, None, password)?;
             println!("Registering new subnet...");
             let hash = client.register_network(&pair, &hk).await?;
-            println!("Subnet registered. Tx: {}", hash);
+            println!("Subnet registered. Check `agcli subnet list` for your new subnet ID.\n  Tx: {}", hash);
             Ok(())
         }
         SubnetCommands::RegisterNeuron { netuid } => {
@@ -494,7 +494,10 @@ pub(super) async fn handle_subnet(
                 crate::utils::short_ss58(&hk)
             );
             let hash = client.burned_register(&pair, NetUid(netuid), &hk).await?;
-            println!("Neuron registered. Tx: {}", hash);
+            println!(
+                "Neuron registered on SN{} with hotkey {}. Check `agcli subnet metagraph --netuid {}` for your UID.\n  Tx: {}",
+                netuid, crate::utils::short_ss58(&hk), netuid, hash
+            );
             Ok(())
         }
         SubnetCommands::Pow { netuid, threads } => {
@@ -534,7 +537,7 @@ pub(super) async fn handle_subnet(
                     let hash = client
                         .pow_register(&pair, NetUid(netuid), &hk, block_number, nonce, work)
                         .await?;
-                    println!("POW registered. Tx: {}", hash);
+                    println!("POW registered on SN{} with nonce {}.\n  Tx: {}", netuid, nonce, hash);
                 }
                 None => println!(
                     "POW not found after {} attempts/thread. Try burn registration.",
