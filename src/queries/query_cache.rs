@@ -277,8 +277,10 @@ impl QueryCache {
         self.dynamic_by_netuid.invalidate_all();
         self.delegates.invalidate_all();
         self.neurons_lite.invalidate_all();
-        super::disk_cache::remove("all_subnets");
-        super::disk_cache::remove("all_dynamic_info");
+        if self.use_disk {
+            super::disk_cache::remove("all_subnets");
+            super::disk_cache::remove("all_dynamic_info");
+        }
     }
 }
 

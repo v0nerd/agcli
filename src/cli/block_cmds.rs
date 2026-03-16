@@ -71,26 +71,40 @@ pub(super) async fn handle_block(
                 extrinsics: usize,
             }
 
-            let mut rows: Vec<BlockRow> = Vec::with_capacity(count);
-            for block_num in from..=to {
-                let block_hash = client.get_block_hash(block_num).await?;
-                let (ext_count, timestamp) = tokio::try_join!(
-                    client.get_block_extrinsic_count(block_hash),
-                    client.get_block_timestamp(block_hash),
-                )?;
+            // Fetch all block hashes concurrently instead of sequentially
+            let hash_futures: Vec<_> = (from..=to)
+                .map(|block_num| client.get_block_hash(block_num))
+                .collect();
+            let block_hashes = futures::future::try_join_all(hash_futures).await?;
 
-                let ts_str = timestamp
-                    .and_then(|ts| chrono::DateTime::from_timestamp_millis(ts as i64))
-                    .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
-                    .unwrap_or_default();
+            // Fetch extrinsic counts + timestamps for all blocks concurrently
+            let detail_futures: Vec<_> = block_hashes
+                .iter()
+                .map(|&hash| async move {
+                    let (ext_count, timestamp) = tokio::try_join!(
+                        client.get_block_extrinsic_count(hash),
+                        client.get_block_timestamp(hash),
+                    )?;
+                    Ok::<_, anyhow::Error>((ext_count, timestamp))
+                })
+                .collect();
+            let details = futures::future::try_join_all(detail_futures).await?;
 
-                rows.push(BlockRow {
-                    block: block_num,
-                    hash: format!("{:?}", block_hash),
-                    timestamp: ts_str,
-                    extrinsics: ext_count,
-                });
-            }
+            let rows: Vec<BlockRow> = (from..=to)
+                .zip(block_hashes.iter().zip(details.iter()))
+                .map(|(block_num, (hash, (ext_count, timestamp)))| {
+                    let ts_str = timestamp
+                        .and_then(|ts| chrono::DateTime::from_timestamp_millis(ts as i64))
+                        .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+                        .unwrap_or_default();
+                    BlockRow {
+                        block: block_num,
+                        hash: format!("{:?}", hash),
+                        timestamp: ts_str,
+                        extrinsics: *ext_count,
+                    }
+                })
+                .collect();
 
             render_rows(
                 output,
@@ -166,8 +180,10 @@ pub(super) async fn handle_diff(
                 anyhow::bail!("No address provided and no wallet found. Use --address <SS58>.");
             }
 
-            let hash1 = client.get_block_hash(block1).await?;
-            let hash2 = client.get_block_hash(block2).await?;
+            let (hash1, hash2) = tokio::try_join!(
+                client.get_block_hash(block1),
+                client.get_block_hash(block2),
+            )?;
 
             let (bal1, stakes1, bal2, stakes2) = tokio::try_join!(
                 client.get_balance_at_block(&addr, hash1),
@@ -255,8 +271,10 @@ pub(super) async fn handle_diff(
             block1,
             block2,
         } => {
-            let hash1 = client.get_block_hash(block1).await?;
-            let hash2 = client.get_block_hash(block2).await?;
+            let (hash1, hash2) = tokio::try_join!(
+                client.get_block_hash(block1),
+                client.get_block_hash(block2),
+            )?;
             let nuid = NetUid(netuid);
 
             let (dyn1, dyn2) = tokio::try_join!(
@@ -354,8 +372,10 @@ pub(super) async fn handle_diff(
             Ok(())
         }
         DiffCommands::Network { block1, block2 } => {
-            let hash1 = client.get_block_hash(block1).await?;
-            let hash2 = client.get_block_hash(block2).await?;
+            let (hash1, hash2) = tokio::try_join!(
+                client.get_block_hash(block1),
+                client.get_block_hash(block2),
+            )?;
 
             let (issuance1, stake1, subnets1, issuance2, stake2, subnets2) = tokio::try_join!(
                 client.get_total_issuance_at_block(hash1),
