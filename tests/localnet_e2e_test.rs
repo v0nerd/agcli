@@ -1,3 +1,4 @@
+#![allow(clippy::unnecessary_unwrap)]
 //! End-to-end tests for `agcli localnet`, `agcli admin`, and `agcli scaffold` modules.
 //!
 //! These tests exercise the SDK layer against a real Docker-based local subtensor chain.

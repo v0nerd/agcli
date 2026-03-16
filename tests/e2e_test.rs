@@ -1,3 +1,8 @@
+#![allow(
+    clippy::needless_borrow,
+    clippy::if_same_then_else,
+    clippy::single_match
+)]
 //! End-to-end tests against a real local subtensor chain (Docker).
 //!
 //! Requires: `docker pull ghcr.io/opentensor/subtensor-localnet:devnet-ready`
@@ -1350,44 +1355,37 @@ async fn test_set_weights(client: &Client, netuid: NetUid) {
             let weights = vec![65535u16];
             let version_key = 0u64;
 
-            let result = client
-                .set_weights(&alice, netuid, &uids, &weights, version_key)
-                .await;
+            let hash = retry_extrinsic(|| {
+                client.set_weights(&alice, netuid, &uids, &weights, version_key)
+            })
+            .await;
+            println!("  set_weights tx: {hash}");
+            wait_blocks(&client, 3).await;
 
-            match result {
-                Ok(hash) => {
-                    println!("  set_weights tx: {hash}");
-                    wait_blocks(&client, 3).await;
-
-                    // Verify weights are stored on-chain
-                    let on_chain = client
-                        .get_weights_for_uid(netuid, uid)
-                        .await
-                        .expect("get_weights_for_uid");
-                    assert!(
-                        !on_chain.is_empty(),
-                        "weights should be set on SN{} for UID {}",
-                        netuid.0,
-                        uid
-                    );
-                    // Verify the weight values match what we set (target UID 0, weight 65535)
-                    let found = on_chain.iter().any(|(t, _)| *t == 0);
-                    assert!(
-                        found,
-                        "on-chain weights should include target UID 0, got: {:?}",
-                        on_chain
-                    );
-                    println!(
-                        "[PASS] set_weights — SN{} UID {}: {} weight entries on-chain, target UID 0 verified",
-                        netuid.0,
-                        uid,
-                        on_chain.len()
-                    );
-                }
-                Err(e) => {
-                    panic!("[FAIL] set_weights on SN{} — {}", netuid.0, e);
-                }
-            }
+            // Verify weights are stored on-chain
+            let on_chain = client
+                .get_weights_for_uid(netuid, uid)
+                .await
+                .expect("get_weights_for_uid");
+            assert!(
+                !on_chain.is_empty(),
+                "weights should be set on SN{} for UID {}",
+                netuid.0,
+                uid
+            );
+            // Verify the weight values match what we set (target UID 0, weight 65535)
+            let found = on_chain.iter().any(|(t, _)| *t == 0);
+            assert!(
+                found,
+                "on-chain weights should include target UID 0, got: {:?}",
+                on_chain
+            );
+            println!(
+                "[PASS] set_weights — SN{} UID {}: {} weight entries on-chain, target UID 0 verified",
+                netuid.0,
+                uid,
+                on_chain.len()
+            );
         }
         None => {
             panic!(

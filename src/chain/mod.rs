@@ -572,7 +572,7 @@ impl Client {
             let addr = api::storage().balances().total_issuance();
             let val = inner.storage().at_latest().await?.fetch(&addr).await?;
             let raw = val.unwrap_or(0);
-            Ok(Balance::from_rao(u64::try_from(raw).unwrap_or(u64::MAX)))
+            Ok(Balance::from_rao(raw))
         })
         .await
     }
@@ -692,7 +692,7 @@ impl Client {
             .await
             .map_err(|e| Self::annotate_at_block_error(e.into(), None))?;
         let raw = val.unwrap_or(0);
-        Ok(Balance::from_rao(u64::try_from(raw).unwrap_or(u64::MAX)))
+        Ok(Balance::from_rao(raw))
     }
 
     /// Total staked TAO at a pinned block hash.

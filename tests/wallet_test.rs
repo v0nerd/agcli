@@ -6,7 +6,7 @@ use agcli::Wallet;
 #[test]
 fn create_wallet_and_read_keys() {
     let dir = tempfile::tempdir().unwrap();
-    let wallet = Wallet::create(
+    let (wallet, _mnemonic, _hk_mnemonic) = Wallet::create(
         dir.path().to_str().unwrap(),
         "test_wallet",
         "password123",
@@ -32,7 +32,8 @@ fn create_wallet_and_read_keys() {
 #[test]
 fn open_wallet_and_read_public_key() {
     let dir = tempfile::tempdir().unwrap();
-    let wallet = Wallet::create(dir.path().to_str().unwrap(), "w1", "pass", "default").unwrap();
+    let (wallet, _, _) =
+        Wallet::create(dir.path().to_str().unwrap(), "w1", "pass", "default").unwrap();
     let addr = wallet.coldkey_ss58().unwrap().to_string();
 
     // Open and verify the SS58 is the same
@@ -43,7 +44,7 @@ fn open_wallet_and_read_public_key() {
 #[test]
 fn unlock_coldkey_correct_password() {
     let dir = tempfile::tempdir().unwrap();
-    Wallet::create(dir.path().to_str().unwrap(), "w2", "secret", "default").unwrap();
+    let _ = Wallet::create(dir.path().to_str().unwrap(), "w2", "secret", "default").unwrap();
     let mut opened = Wallet::open(format!("{}/w2", dir.path().to_str().unwrap())).unwrap();
     assert!(opened.unlock_coldkey("secret").is_ok());
     assert!(opened.coldkey().is_ok());
@@ -52,7 +53,7 @@ fn unlock_coldkey_correct_password() {
 #[test]
 fn unlock_coldkey_wrong_password() {
     let dir = tempfile::tempdir().unwrap();
-    Wallet::create(dir.path().to_str().unwrap(), "w3", "correct", "default").unwrap();
+    let _ = Wallet::create(dir.path().to_str().unwrap(), "w3", "correct", "default").unwrap();
     let mut opened = Wallet::open(format!("{}/w3", dir.path().to_str().unwrap())).unwrap();
     assert!(opened.unlock_coldkey("wrong").is_err());
 }
@@ -82,8 +83,8 @@ fn import_from_mnemonic_and_verify() {
 fn list_wallets() {
     let dir = tempfile::tempdir().unwrap();
     let base = dir.path().to_str().unwrap();
-    Wallet::create(base, "alice", "pass", "default").unwrap();
-    Wallet::create(base, "bob", "pass", "default").unwrap();
+    let _ = Wallet::create(base, "alice", "pass", "default").unwrap();
+    let _ = Wallet::create(base, "bob", "pass", "default").unwrap();
     let wallets = Wallet::list_wallets(base).unwrap();
     assert!(wallets.contains(&"alice".to_string()));
     assert!(wallets.contains(&"bob".to_string()));
@@ -94,7 +95,7 @@ fn list_wallets() {
 fn list_hotkeys() {
     let dir = tempfile::tempdir().unwrap();
     let base = dir.path().to_str().unwrap();
-    let wallet = Wallet::create(base, "hk_test", "pass", "default").unwrap();
+    let (wallet, _, _) = Wallet::create(base, "hk_test", "pass", "default").unwrap();
     let hotkeys = wallet.list_hotkeys().unwrap();
     assert!(hotkeys.contains(&"default".to_string()));
 }
@@ -118,7 +119,7 @@ fn open_nonexistent_wallet_has_no_keys() {
 #[test]
 fn wrong_password_error_message_is_helpful() {
     let dir = tempfile::tempdir().unwrap();
-    Wallet::create(
+    let _ = Wallet::create(
         dir.path().to_str().unwrap(),
         "err_test",
         "correct",
