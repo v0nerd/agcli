@@ -28,6 +28,7 @@ pub mod extrinsics;
 pub mod live;
 pub mod localnet;
 pub mod queries;
+pub mod scaffold;
 pub mod types;
 pub mod utils;
 pub mod wallet;

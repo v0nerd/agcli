@@ -1804,6 +1804,21 @@ pub enum LocalnetCommands {
         #[arg(long)]
         tail: Option<u32>,
     },
+    /// Scaffold a full test environment (chain + subnets + neurons + hyperparams)
+    Scaffold {
+        /// Path to scaffold TOML config (default: sensible defaults)
+        #[arg(long)]
+        config: Option<String>,
+        /// Docker image tag
+        #[arg(long)]
+        image: Option<String>,
+        /// Host port (default: 9944)
+        #[arg(long)]
+        port: Option<u16>,
+        /// Skip starting chain (assume already running)
+        #[arg(long)]
+        no_start: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]

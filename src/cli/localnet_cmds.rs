@@ -3,6 +3,7 @@
 use crate::cli::helpers::*;
 use crate::cli::LocalnetCommands;
 use crate::localnet::{self, LocalnetConfig};
+use crate::scaffold::{self, ScaffoldConfig};
 use anyhow::Result;
 
 pub(super) async fn handle_localnet(cmd: LocalnetCommands, ctx: &Ctx<'_>) -> Result<()> {
@@ -152,6 +153,67 @@ pub(super) async fn handle_localnet(cmd: LocalnetCommands, ctx: &Ctx<'_>) -> Res
             let name = container.unwrap_or_else(|| localnet::DEFAULT_CONTAINER.to_string());
             let log_output = localnet::logs(&name, tail)?;
             print!("{}", log_output);
+            Ok(())
+        }
+
+        LocalnetCommands::Scaffold {
+            config,
+            image,
+            port,
+            no_start,
+        } => {
+            // Load config from file or use defaults
+            let mut cfg = if let Some(ref path) = config {
+                scaffold::load_config(path)?
+            } else {
+                ScaffoldConfig::default()
+            };
+
+            // CLI overrides
+            if let Some(img) = image {
+                cfg.chain.image = img;
+            }
+            if let Some(p) = port {
+                cfg.chain.port = p;
+            }
+            if no_start {
+                cfg.chain.start = false;
+            }
+
+            let is_json = ctx.output.is_json();
+
+            let result = scaffold::run_with_progress(&cfg, |msg| {
+                if !is_json {
+                    eprintln!("{}", msg);
+                }
+            })
+            .await?;
+
+            if is_json {
+                print_json_ser(&result);
+            } else {
+                println!();
+                println!("Scaffold complete!");
+                println!("  Endpoint: {}", result.endpoint);
+                println!("  Block:    {}", result.block_height);
+                println!();
+                for sn in &result.subnets {
+                    println!("  Subnet {} ({} neurons):", sn.netuid, sn.neurons.len());
+                    for n in &sn.neurons {
+                        let uid_str = n
+                            .uid
+                            .map(|u| format!("UID {}", u))
+                            .unwrap_or_else(|| "not registered".to_string());
+                        let bal_str = n
+                            .balance_tao
+                            .map(|b| format!("{} TAO", b))
+                            .unwrap_or_else(|| "unfunded".to_string());
+                        println!("    {} — {} | {} | {}", n.name, n.ss58, uid_str, bal_str);
+                    }
+                    println!();
+                }
+                println!("Use these accounts with: agcli --network local <command>");
+            }
             Ok(())
         }
     }
