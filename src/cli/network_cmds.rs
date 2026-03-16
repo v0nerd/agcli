@@ -908,6 +908,33 @@ pub(super) async fn handle_safe_mode(
     }
 }
 
+// ──────── Drand ────────
+
+pub(super) async fn handle_drand(cmd: DrandCommands, client: &Client, ctx: &Ctx<'_>) -> Result<()> {
+    match cmd {
+        DrandCommands::WritePulse { payload, signature } => {
+            let mut wallet = open_wallet(ctx.wallet_dir, ctx.wallet_name)?;
+            unlock_coldkey(&mut wallet, ctx.password)?;
+            let payload_hex = payload.strip_prefix("0x").unwrap_or(&payload);
+            let payload_bytes = hex::decode(payload_hex)
+                .map_err(|e| anyhow::anyhow!("Invalid payload hex: {}", e))?;
+            let sig_hex = signature.strip_prefix("0x").unwrap_or(&signature);
+            let sig_bytes = hex::decode(sig_hex)
+                .map_err(|e| anyhow::anyhow!("Invalid signature hex: {}", e))?;
+            println!(
+                "Writing Drand pulse ({} bytes payload, {} bytes sig)",
+                payload_bytes.len(),
+                sig_bytes.len()
+            );
+            let tx_hash = client
+                .drand_write_pulse(wallet.coldkey()?, payload_bytes, sig_bytes)
+                .await?;
+            println!("Drand pulse written. Tx: {}", tx_hash);
+            Ok(())
+        }
+    }
+}
+
 // ──────── Serve ────────
 
 pub(super) async fn handle_serve(cmd: ServeCommands, client: &Client, ctx: &Ctx<'_>) -> Result<()> {

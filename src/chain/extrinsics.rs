@@ -1963,6 +1963,27 @@ impl Client {
         self.submit_sudo_raw_call(pair, "SafeMode", "force_exit", vec![])
             .await
     }
+
+    // ──────── Drand ────────
+
+    /// Write a Drand randomness pulse to the chain (Drand::write_pulse).
+    pub async fn drand_write_pulse(
+        &self,
+        pair: &sr25519::Pair,
+        pulses_payload: Vec<u8>,
+        signature: Vec<u8>,
+    ) -> Result<String> {
+        use subxt::dynamic::Value;
+        let tx = subxt::dynamic::tx(
+            "Drand",
+            "write_pulse",
+            vec![
+                Value::from_bytes(pulses_payload),
+                Value::from_bytes(signature),
+            ],
+        );
+        self.sign_submit(&tx, pair).await
+    }
 }
 
 /// Parse a proxy type string to the on-chain variant name.

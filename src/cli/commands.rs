@@ -83,6 +83,7 @@ pub async fn execute(cli: Cli) -> Result<()> {
         Commands::Contracts(_) => "contracts",
         Commands::Evm(_) => "evm",
         Commands::SafeMode(_) => "safe-mode",
+        Commands::Drand(_) => "drand",
         Commands::Localnet(_) => "localnet",
         Commands::Admin(_) => "admin",
     };
@@ -467,6 +468,10 @@ pub async fn execute(cli: Cli) -> Result<()> {
         Commands::SafeMode(cmd) => {
             let client = connect(&network, dry_run, best).await?;
             network_cmds::handle_safe_mode(cmd, &client, &ctx).await
+        }
+        Commands::Drand(cmd) => {
+            let client = connect(&network, dry_run, best).await?;
+            network_cmds::handle_drand(cmd, &client, &ctx).await
         }
         Commands::Localnet(cmd) => localnet_cmds::handle_localnet(cmd, &ctx).await,
         Commands::Admin(cmd) => {

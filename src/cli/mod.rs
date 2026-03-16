@@ -345,6 +345,11 @@ pub enum Commands {
     #[command(subcommand)]
     SafeMode(SafeModeCommands),
 
+    // ──── Drand ────
+    /// Drand randomness beacon operations
+    #[command(subcommand)]
+    Drand(DrandCommands),
+
     // ──── Batch ────
     /// Submit multiple extrinsics from a JSON file via Utility.batch_all
     Batch {
@@ -1820,6 +1825,19 @@ pub enum SafeModeCommands {
     },
     /// Force exit safe mode (requires sudo)
     ForceExit,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum DrandCommands {
+    /// Write a Drand randomness pulse to the chain
+    WritePulse {
+        /// Pulses payload (hex-encoded)
+        #[arg(long)]
+        payload: String,
+        /// Signature (hex-encoded)
+        #[arg(long)]
+        signature: String,
+    },
 }
 
 #[derive(Subcommand, Debug)]
