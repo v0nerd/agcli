@@ -274,43 +274,69 @@ where
         on_progress(&format!("Subnet created: netuid {}", netuid));
 
         // 5. Set hyperparameters via sudo
+        //    Some chains reject admin calls during weights windows or lack certain
+        //    calls in their runtime. We treat these as non-fatal: log a warning
+        //    via the progress callback and continue scaffolding.
         let mut hyperparams = serde_json::Map::new();
 
+        /// Try an admin call; on known chain-specific errors, warn and continue.
+        macro_rules! try_admin {
+            ($label:expr, $call:expr, $key:expr, $val:expr, $hp:expr, $cb:expr) => {
+                match $call.await {
+                    Ok(_) => {
+                        $hp.insert($key.into(), $val.into());
+                    }
+                    Err(e) => {
+                        let msg = e.to_string();
+                        if msg.contains("WeightsWindow")
+                            || msg.contains("AdminActionProhibited")
+                            || msg.contains("not found")
+                            || msg.contains("Bad origin")
+                        {
+                            $cb(&format!("Warning: {} skipped — {}", $label, &msg[..80.min(msg.len())]));
+                        } else {
+                            return Err(e);
+                        }
+                    }
+                }
+            };
+        }
+
         if let Some(tempo) = subnet_cfg.tempo {
-            admin::set_tempo(&client, &alice, netuid, tempo).await?;
-            hyperparams.insert("tempo".into(), tempo.into());
+            try_admin!("set_tempo", admin::set_tempo(&client, &alice, netuid, tempo),
+                "tempo", tempo, hyperparams, on_progress);
         }
         if let Some(max_val) = subnet_cfg.max_allowed_validators {
-            admin::set_max_allowed_validators(&client, &alice, netuid, max_val).await?;
-            hyperparams.insert("max_allowed_validators".into(), max_val.into());
+            try_admin!("set_max_validators", admin::set_max_allowed_validators(&client, &alice, netuid, max_val),
+                "max_allowed_validators", max_val, hyperparams, on_progress);
         }
         if let Some(max_uids) = subnet_cfg.max_allowed_uids {
-            admin::set_max_allowed_uids(&client, &alice, netuid, max_uids).await?;
-            hyperparams.insert("max_allowed_uids".into(), max_uids.into());
+            try_admin!("set_max_uids", admin::set_max_allowed_uids(&client, &alice, netuid, max_uids),
+                "max_allowed_uids", max_uids, hyperparams, on_progress);
         }
         if let Some(min_w) = subnet_cfg.min_allowed_weights {
-            admin::set_min_allowed_weights(&client, &alice, netuid, min_w).await?;
-            hyperparams.insert("min_allowed_weights".into(), min_w.into());
+            try_admin!("set_min_weights", admin::set_min_allowed_weights(&client, &alice, netuid, min_w),
+                "min_allowed_weights", min_w, hyperparams, on_progress);
         }
         if let Some(max_wl) = subnet_cfg.max_weight_limit {
-            admin::set_max_weight_limit(&client, &alice, netuid, max_wl).await?;
-            hyperparams.insert("max_weight_limit".into(), max_wl.into());
+            try_admin!("set_max_weight_limit", admin::set_max_weight_limit(&client, &alice, netuid, max_wl),
+                "max_weight_limit", max_wl, hyperparams, on_progress);
         }
         if let Some(ip) = subnet_cfg.immunity_period {
-            admin::set_immunity_period(&client, &alice, netuid, ip).await?;
-            hyperparams.insert("immunity_period".into(), ip.into());
+            try_admin!("set_immunity_period", admin::set_immunity_period(&client, &alice, netuid, ip),
+                "immunity_period", ip, hyperparams, on_progress);
         }
         if let Some(wrl) = subnet_cfg.weights_rate_limit {
-            admin::set_weights_set_rate_limit(&client, &alice, netuid, wrl).await?;
-            hyperparams.insert("weights_rate_limit".into(), wrl.into());
+            try_admin!("set_weights_rate_limit", admin::set_weights_set_rate_limit(&client, &alice, netuid, wrl),
+                "weights_rate_limit", wrl, hyperparams, on_progress);
         }
         if let Some(cr) = subnet_cfg.commit_reveal {
-            admin::set_commit_reveal_weights_enabled(&client, &alice, netuid, cr).await?;
-            hyperparams.insert("commit_reveal".into(), cr.into());
+            try_admin!("set_commit_reveal", admin::set_commit_reveal_weights_enabled(&client, &alice, netuid, cr),
+                "commit_reveal", cr, hyperparams, on_progress);
         }
         if let Some(ac) = subnet_cfg.activity_cutoff {
-            admin::set_activity_cutoff(&client, &alice, netuid, ac).await?;
-            hyperparams.insert("activity_cutoff".into(), ac.into());
+            try_admin!("set_activity_cutoff", admin::set_activity_cutoff(&client, &alice, netuid, ac),
+                "activity_cutoff", ac, hyperparams, on_progress);
         }
 
         on_progress(&format!(
@@ -405,10 +431,20 @@ where
             Ok(hash) => return Ok(hash),
             Err(e) => {
                 let msg = format!("{}", e);
-                if (msg.contains("outdated") || msg.contains("banned") || msg.contains("subscription"))
-                    && attempt < 10
-                {
-                    let delay = if msg.contains("banned") { 13_000 } else { 100 };
+                let is_transient = msg.contains("outdated")
+                    || msg.contains("banned")
+                    || msg.contains("subscription")
+                    || msg.contains("State already discarded")
+                    || msg.contains("UnknownBlock")
+                    || msg.contains("not valid");
+                if is_transient && attempt < 10 {
+                    let delay = if msg.contains("banned") {
+                        13_000
+                    } else if msg.contains("State") || msg.contains("Unknown") {
+                        1_000 // Longer delay for state pruning
+                    } else {
+                        100
+                    };
                     tokio::time::sleep(Duration::from_millis(delay)).await;
                     continue;
                 }

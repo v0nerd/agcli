@@ -26,6 +26,8 @@ fn is_transient_error(msg: &str) -> bool {
         || msg.contains("transport")
         || msg.contains("closed")
         || msg.contains("reset")
+        || msg.contains("State already discarded") // fast-block chain state pruning
+        || msg.contains("UnknownBlock")            // stale block reference
 }
 
 /// Default retry count for RPC queries.

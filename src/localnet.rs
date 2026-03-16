@@ -183,11 +183,15 @@ pub fn stop(container_name: &str) -> Result<()> {
         .output()
         .context("Failed to stop Docker container")?;
 
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    // docker rm -f may return exit 0 even for missing containers (Docker 28+),
+    // so check stderr regardless of exit code.
+    if stderr.contains("No such container") {
+        bail!("Container '{}' not found (already stopped?)", container_name);
+    }
+
     if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        if stderr.contains("No such container") {
-            bail!("Container '{}' not found (already stopped?)", container_name);
-        }
         bail!(
             "Failed to stop container '{}': {}",
             container_name,

@@ -1252,6 +1252,43 @@ impl Client {
         self.sign_submit(&tx, pair).await
     }
 
+    /// Submit a call wrapped in `Sudo.sudo()` — used for AdminUtils and other privileged calls.
+    ///
+    /// The `pair` must be the chain's sudo key (typically `//Alice` on localnet).
+    /// Returns an error (not panic) if the call doesn't exist in the runtime metadata.
+    pub async fn submit_sudo_raw_call(
+        &self,
+        pair: &sr25519::Pair,
+        pallet: &str,
+        call: &str,
+        fields: Vec<subxt::dynamic::Value>,
+    ) -> Result<String> {
+        // Validate the call exists in the pallet's metadata before encoding.
+        // subxt panics (rather than returning Err) if the call variant is missing,
+        // so we pre-check using the metadata API directly.
+        let metadata = self.inner.metadata();
+        match metadata.pallet_by_name(pallet) {
+            Some(p) => {
+                if p.call_variant_by_name(call).is_none() {
+                    anyhow::bail!(
+                        "Call {}.{} not found in runtime metadata",
+                        pallet,
+                        call
+                    );
+                }
+            }
+            None => {
+                anyhow::bail!("Pallet '{}' not found in runtime metadata", pallet);
+            }
+        }
+
+        // Convert to a Value variant (RuntimeCall enum shape) for Sudo wrapping.
+        let inner = subxt::dynamic::tx(pallet, call, fields);
+        let inner_value = inner.into_value();
+        let sudo_tx = subxt::dynamic::tx("Sudo", "sudo", vec![inner_value]);
+        self.sign_submit(&sudo_tx, pair).await
+    }
+
     // ──────── Commitments ────────
 
     /// Set commitment data on a subnet (miners use this to publish endpoints).
