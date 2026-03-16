@@ -1292,8 +1292,13 @@ async fn handle_snipe(
                 {
                     println!();
                     anyhow::bail!(
-                        "Hotkey {} is not registered in any subnet. Register on at least one subnet first, \
-                         then retry. Error: {}", short_hk, crate::utils::truncate(&msg, 120)
+                        "Chain returned HotKeyNotRegisteredInNetwork for hotkey {}. \
+                         This can happen if the hotkey SS58 address is invalid or if the chain \
+                         requires the hotkey to exist before burn registration. \
+                         Verify your --wallet and --hotkey flags point to the correct keys.\n  \
+                         Error: {}",
+                        short_hk,
+                        crate::utils::truncate(&msg, 200)
                     );
                 } else if msg.contains("NonAssociatedColdKey") {
                     println!();

@@ -842,44 +842,80 @@ fn decode_custom_error(msg: &str) -> Option<&'static str> {
         56 => Some("AlphaLowOutOfRange"),
         57 => Some("ColdKeyAlreadyAssociated"),
         58 => Some("NotEnoughBalanceToPaySwapColdKey"),
-        59 => Some("ColdkeyIsInArbitration"),
-        60 => Some("InvalidChild"),
-        61 => Some("DuplicateChild"),
-        62 => Some("ProportionOverflow"),
-        63 => Some("TooManyChildren"),
-        64 => Some("TxRateLimitExceeded"),
-        65 => Some("SwapAlreadyScheduled"),
-        66 => Some("FailedToSchedule"),
-        67 => Some("NewColdKeyIsHotkey"),
-        68 => Some("InvalidChildkeyTake"),
-        69 => Some("TxChildkeyTakeRateLimitExceeded"),
-        70 => Some("InvalidIdentity"),
-        71 => Some("MechanismDoesNotExist"),
-        72 => Some("CannotUnstakeLock"),
-        73 => Some("SubnetNotExists"),
-        74 => Some("TooManyUnrevealedCommits"),
-        75 => Some("ExpiredWeightCommit"),
-        76 => Some("RevealTooEarly"),
-        77 => Some("InputLengthsUnequal"),
-        78 => Some("CommittingWeightsTooFast"),
-        79 => Some("AmountTooLow"),
-        80 => Some("InsufficientLiquidity"),
-        81 => Some("SlippageTooHigh"),
-        82 => Some("TransferDisallowed"),
-        83 => Some("ActivityCutoffTooLow"),
-        84 => Some("CallDisabled"),
-        85 => Some("FirstEmissionBlockNumberAlreadySet"),
-        86 => Some("NeedWaitingMoreBlocksToStarCall"),
-        87 => Some("NotEnoughAlphaOutToRecycle"),
-        88 => Some("CannotBurnOrRecycleOnRootSubnet"),
-        89 => Some("UnableToRecoverPublicKey"),
-        90 => Some("InvalidRecoveredPublicKey"),
-        91 => Some("SubtokenDisabled"),
-        92 => Some("HotKeySwapOnSubnetIntervalNotPassed"),
-        93 => Some("ZeroMaxStakeAmount"),
-        94 => Some("SameNetuid"),
-        95 => Some("InsufficientBalance"),
-        96 => Some("StakingOperationRateLimitExceeded"),
+        59 => Some("InvalidChild"),
+        60 => Some("DuplicateChild"),
+        61 => Some("ProportionOverflow"),
+        62 => Some("TooManyChildren"),
+        63 => Some("TxRateLimitExceeded"),
+        64 => Some("ColdkeySwapAnnouncementNotFound"),
+        65 => Some("ColdkeySwapTooEarly"),
+        66 => Some("ColdkeySwapReannouncedTooEarly"),
+        67 => Some("AnnouncedColdkeyHashDoesNotMatch"),
+        68 => Some("ColdkeySwapAlreadyDisputed"),
+        69 => Some("NewColdKeyIsHotkey"),
+        70 => Some("InvalidChildkeyTake"),
+        71 => Some("TxChildkeyTakeRateLimitExceeded"),
+        72 => Some("InvalidIdentity"),
+        73 => Some("MechanismDoesNotExist"),
+        74 => Some("CannotUnstakeLock"),
+        75 => Some("SubnetNotExists"),
+        76 => Some("TooManyUnrevealedCommits"),
+        77 => Some("ExpiredWeightCommit"),
+        78 => Some("RevealTooEarly"),
+        79 => Some("InputLengthsUnequal"),
+        80 => Some("CommittingWeightsTooFast"),
+        81 => Some("AmountTooLow"),
+        82 => Some("InsufficientLiquidity"),
+        83 => Some("SlippageTooHigh"),
+        84 => Some("TransferDisallowed"),
+        85 => Some("ActivityCutoffTooLow"),
+        86 => Some("CallDisabled"),
+        87 => Some("FirstEmissionBlockNumberAlreadySet"),
+        88 => Some("NeedWaitingMoreBlocksToStarCall"),
+        89 => Some("NotEnoughAlphaOutToRecycle"),
+        90 => Some("CannotBurnOrRecycleOnRootSubnet"),
+        91 => Some("UnableToRecoverPublicKey"),
+        92 => Some("InvalidRecoveredPublicKey"),
+        93 => Some("SubtokenDisabled"),
+        94 => Some("HotKeySwapOnSubnetIntervalNotPassed"),
+        95 => Some("ZeroMaxStakeAmount"),
+        96 => Some("SameNetuid"),
+        97 => Some("InsufficientBalance"),
+        98 => Some("StakingOperationRateLimitExceeded"),
+        99 => Some("InvalidLeaseBeneficiary"),
+        100 => Some("LeaseCannotEndInThePast"),
+        101 => Some("LeaseNetuidNotFound"),
+        102 => Some("LeaseDoesNotExist"),
+        103 => Some("LeaseHasNoEndBlock"),
+        104 => Some("LeaseHasNotEnded"),
+        105 => Some("Overflow"),
+        106 => Some("BeneficiaryDoesNotOwnHotkey"),
+        107 => Some("ExpectedBeneficiaryOrigin"),
+        108 => Some("AdminActionProhibitedDuringWeightsWindow"),
+        109 => Some("SymbolDoesNotExist"),
+        110 => Some("SymbolAlreadyInUse"),
+        111 => Some("IncorrectCommitRevealVersion"),
+        112 => Some("RevealPeriodTooLarge"),
+        113 => Some("RevealPeriodTooSmall"),
+        114 => Some("InvalidValue"),
+        115 => Some("SubnetLimitReached"),
+        116 => Some("CannotAffordLockCost"),
+        117 => Some("EvmKeyAssociateRateLimitExceeded"),
+        118 => Some("SameAutoStakeHotkeyAlreadySet"),
+        119 => Some("UidMapCouldNotBeCleared"),
+        120 => Some("TrimmingWouldExceedMaxImmunePercentage"),
+        121 => Some("ChildParentInconsistency"),
+        122 => Some("InvalidNumRootClaim"),
+        123 => Some("InvalidRootClaimThreshold"),
+        124 => Some("InvalidSubnetNumber"),
+        125 => Some("TooManyUIDsPerMechanism"),
+        126 => Some("VotingPowerTrackingNotEnabled"),
+        127 => Some("InvalidVotingPowerEmaAlpha"),
+        128 => Some("PrecisionLoss"),
+        129 => Some("Deprecated"),
+        130 => Some("AddStakeBurnRateLimitExceeded"),
+        131 => Some("ColdkeySwapAnnounced"),
+        132 => Some("ColdkeySwapDisputed"),
         _ => None,
     }
 }
@@ -929,8 +965,19 @@ fn format_dispatch_error(e: subxt::Error) -> anyhow::Error {
         "Subnet capacity reached or does not exist. Check `agcli subnet list` for current subnets."
     } else if msg.contains("HotKeyAlreadyRegistered") {
         "This hotkey is already registered. Use a different hotkey or deregister the existing one first."
-    } else if msg.contains("ColdKeySwapScheduled") || msg.contains("ColdKeyAlreadyAssociated") {
-        "A coldkey operation is already pending for this account. Wait for it to complete."
+    } else if msg.contains("ColdKeySwapScheduled")
+        || msg.contains("ColdKeyAlreadyAssociated")
+        || msg.contains("ColdkeySwapAnnounced")
+        || msg.contains("ColdkeySwapDisputed")
+    {
+        "A coldkey swap operation is already scheduled or disputed. Wait for it to complete."
+    } else if msg.contains("ColdkeySwapAnnouncementNotFound") {
+        "No coldkey swap has been announced for this account."
+    } else if msg.contains("ColdkeySwapTooEarly") || msg.contains("ColdkeySwapReannouncedTooEarly")
+    {
+        "Coldkey swap was announced too recently. Wait for the cooldown period before executing."
+    } else if msg.contains("AnnouncedColdkeyHashDoesNotMatch") {
+        "The new coldkey does not match the previously announced swap destination."
     } else if msg.contains("DelegateAlreadySet") {
         "Delegate is already set for this hotkey."
     } else if msg.contains("InvalidTransaction") && msg.contains("proxy") {
@@ -955,6 +1002,18 @@ fn format_dispatch_error(e: subxt::Error) -> anyhow::Error {
         "Slippage too high for this operation. Try a smaller amount or wait for better liquidity."
     } else if msg.contains("AmountTooLow") {
         "Amount is below the minimum threshold for this operation."
+    } else if msg.contains("SubnetLimitReached") || msg.contains("CannotAffordLockCost") {
+        "Cannot create subnet: either the subnet limit is reached or you cannot afford the lock cost."
+    } else if msg.contains("AddStakeBurnRateLimitExceeded") {
+        "Add-stake-burn rate limit exceeded. Wait a few blocks before retrying."
+    } else if msg.contains("LeaseNetuidNotFound") || msg.contains("LeaseDoesNotExist") {
+        "Subnet lease not found. Verify the subnet ID and that a lease exists."
+    } else if msg.contains("SymbolAlreadyInUse") {
+        "This token symbol is already taken. Choose a different symbol."
+    } else if msg.contains("SymbolDoesNotExist") {
+        "The specified symbol does not exist."
+    } else if msg.contains("Overflow") || msg.contains("PrecisionLoss") {
+        "Arithmetic overflow or precision loss. Try a smaller amount."
     } else {
         "" // no special hint
     };
@@ -1104,6 +1163,38 @@ mod tests {
     #[test]
     fn decode_custom_error_unknown_index() {
         assert_eq!(decode_custom_error("Custom error: 999"), None);
+    }
+
+    #[test]
+    fn decode_custom_error_59_invalidchild() {
+        assert_eq!(
+            decode_custom_error("Custom error: 59"),
+            Some("InvalidChild")
+        );
+    }
+
+    #[test]
+    fn decode_custom_error_97_insufficientbalance() {
+        assert_eq!(
+            decode_custom_error("Custom error: 97"),
+            Some("InsufficientBalance")
+        );
+    }
+
+    #[test]
+    fn decode_custom_error_98_staking_rate_limit() {
+        assert_eq!(
+            decode_custom_error("Custom error: 98"),
+            Some("StakingOperationRateLimitExceeded")
+        );
+    }
+
+    #[test]
+    fn decode_custom_error_132_coldkey_disputed() {
+        assert_eq!(
+            decode_custom_error("Custom error: 132"),
+            Some("ColdkeySwapDisputed")
+        );
     }
 
     #[test]

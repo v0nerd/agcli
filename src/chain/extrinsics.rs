@@ -1755,6 +1755,212 @@ impl Client {
         );
         self.sign_submit(&tx, pair).await
     }
+
+    // ──────── Contracts (WASM) ────────
+
+    /// Upload WASM contract code (Contracts::upload_code).
+    pub async fn contracts_upload_code(
+        &self,
+        pair: &sr25519::Pair,
+        code: Vec<u8>,
+        storage_deposit_limit: Option<u128>,
+    ) -> Result<String> {
+        use subxt::dynamic::Value;
+        let deposit_limit = match storage_deposit_limit {
+            Some(limit) => Value::unnamed_variant("Some", [Value::u128(limit)]),
+            None => Value::unnamed_variant("None", []),
+        };
+        let tx = subxt::dynamic::tx(
+            "Contracts",
+            "upload_code",
+            vec![
+                Value::from_bytes(code),
+                deposit_limit,
+                Value::unnamed_variant("Unrestricted", []),
+            ],
+        );
+        self.sign_submit(&tx, pair).await
+    }
+
+    /// Instantiate a contract from already-uploaded code hash (Contracts::instantiate).
+    pub async fn contracts_instantiate(
+        &self,
+        pair: &sr25519::Pair,
+        value: u128,
+        gas_limit_ref_time: u64,
+        gas_limit_proof_size: u64,
+        storage_deposit_limit: Option<u128>,
+        code_hash: [u8; 32],
+        data: Vec<u8>,
+        salt: Vec<u8>,
+    ) -> Result<String> {
+        use subxt::dynamic::Value;
+        let deposit_limit = match storage_deposit_limit {
+            Some(limit) => Value::unnamed_variant("Some", [Value::u128(limit)]),
+            None => Value::unnamed_variant("None", []),
+        };
+        let gas_limit = Value::named_composite([
+            ("ref_time", Value::u128(gas_limit_ref_time as u128)),
+            ("proof_size", Value::u128(gas_limit_proof_size as u128)),
+        ]);
+        let tx = subxt::dynamic::tx(
+            "Contracts",
+            "instantiate",
+            vec![
+                Value::u128(value),
+                gas_limit,
+                deposit_limit,
+                Value::unnamed_variant("Existing", [Value::from_bytes(code_hash)]),
+                Value::from_bytes(data),
+                Value::from_bytes(salt),
+            ],
+        );
+        self.sign_submit(&tx, pair).await
+    }
+
+    /// Call an existing contract (Contracts::call).
+    pub async fn contracts_call(
+        &self,
+        pair: &sr25519::Pair,
+        dest_ss58: &str,
+        value: u128,
+        gas_limit_ref_time: u64,
+        gas_limit_proof_size: u64,
+        storage_deposit_limit: Option<u128>,
+        data: Vec<u8>,
+    ) -> Result<String> {
+        use subxt::dynamic::Value;
+        let dest_id = Self::ss58_to_account_id(dest_ss58)?;
+        let deposit_limit = match storage_deposit_limit {
+            Some(limit) => Value::unnamed_variant("Some", [Value::u128(limit)]),
+            None => Value::unnamed_variant("None", []),
+        };
+        let gas_limit = Value::named_composite([
+            ("ref_time", Value::u128(gas_limit_ref_time as u128)),
+            ("proof_size", Value::u128(gas_limit_proof_size as u128)),
+        ]);
+        let tx = subxt::dynamic::tx(
+            "Contracts",
+            "call",
+            vec![
+                Value::unnamed_variant("Id", [Value::from_bytes(dest_id.0)]),
+                Value::u128(value),
+                gas_limit,
+                deposit_limit,
+                Value::from_bytes(data),
+            ],
+        );
+        self.sign_submit(&tx, pair).await
+    }
+
+    /// Remove uploaded contract code (Contracts::remove_code).
+    pub async fn contracts_remove_code(
+        &self,
+        pair: &sr25519::Pair,
+        code_hash: [u8; 32],
+    ) -> Result<String> {
+        use subxt::dynamic::Value;
+        let tx = subxt::dynamic::tx(
+            "Contracts",
+            "remove_code",
+            vec![Value::from_bytes(code_hash)],
+        );
+        self.sign_submit(&tx, pair).await
+    }
+
+    // ──────── EVM ────────
+
+    /// Execute an EVM call (EVM::call).
+    pub async fn evm_call(
+        &self,
+        pair: &sr25519::Pair,
+        source: [u8; 20],
+        target: [u8; 20],
+        input: Vec<u8>,
+        value: [u8; 32],
+        gas_limit: u64,
+        max_fee_per_gas: [u8; 32],
+        max_priority_fee_per_gas: Option<[u8; 32]>,
+        nonce: Option<[u8; 32]>,
+    ) -> Result<String> {
+        use subxt::dynamic::Value;
+        let priority = match max_priority_fee_per_gas {
+            Some(p) => Value::unnamed_variant("Some", [Value::from_bytes(p)]),
+            None => Value::unnamed_variant("None", []),
+        };
+        let nonce_val = match nonce {
+            Some(n) => Value::unnamed_variant("Some", [Value::from_bytes(n)]),
+            None => Value::unnamed_variant("None", []),
+        };
+        let tx = subxt::dynamic::tx(
+            "EVM",
+            "call",
+            vec![
+                Value::from_bytes(source),
+                Value::from_bytes(target),
+                Value::from_bytes(input),
+                Value::from_bytes(value),
+                Value::u128(gas_limit as u128),
+                Value::from_bytes(max_fee_per_gas),
+                priority,
+                nonce_val,
+                Value::unnamed_composite([]), // access_list
+            ],
+        );
+        self.sign_submit(&tx, pair).await
+    }
+
+    /// Withdraw balance from EVM (EVM::withdraw).
+    pub async fn evm_withdraw(
+        &self,
+        pair: &sr25519::Pair,
+        address: [u8; 20],
+        value: u128,
+    ) -> Result<String> {
+        use subxt::dynamic::Value;
+        let tx = subxt::dynamic::tx(
+            "EVM",
+            "withdraw",
+            vec![Value::from_bytes(address), Value::u128(value)],
+        );
+        self.sign_submit(&tx, pair).await
+    }
+
+    // ──────── SafeMode ────────
+
+    /// Enter safe mode permissionlessly (SafeMode::enter).
+    pub async fn safe_mode_enter(&self, pair: &sr25519::Pair) -> Result<String> {
+        let tx = subxt::dynamic::tx("SafeMode", "enter", vec![]);
+        self.sign_submit(&tx, pair).await
+    }
+
+    /// Extend safe mode duration (SafeMode::extend).
+    pub async fn safe_mode_extend(&self, pair: &sr25519::Pair) -> Result<String> {
+        let tx = subxt::dynamic::tx("SafeMode", "extend", vec![]);
+        self.sign_submit(&tx, pair).await
+    }
+
+    /// Force enter safe mode (requires privilege) via sudo.
+    pub async fn safe_mode_force_enter(
+        &self,
+        pair: &sr25519::Pair,
+        duration: u32,
+    ) -> Result<String> {
+        use subxt::dynamic::Value;
+        self.submit_sudo_raw_call(
+            pair,
+            "SafeMode",
+            "force_enter",
+            vec![Value::u128(duration as u128)],
+        )
+        .await
+    }
+
+    /// Force exit safe mode (requires privilege) via sudo.
+    pub async fn safe_mode_force_exit(&self, pair: &sr25519::Pair) -> Result<String> {
+        self.submit_sudo_raw_call(pair, "SafeMode", "force_exit", vec![])
+            .await
+    }
 }
 
 /// Parse a proxy type string to the on-chain variant name.
