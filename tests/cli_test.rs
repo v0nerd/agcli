@@ -3095,27 +3095,6 @@ fn parse_weights_show() {
     assert!(cli.is_ok(), "weights show: {:?}", cli.err());
 }
 
-#[test]
-fn parse_weights_show_with_hotkey() {
-    let cli = agcli::cli::Cli::try_parse_from([
-        "agcli",
-        "weights",
-        "show",
-        "--netuid",
-        "97",
-        "--hotkey",
-        "5Cai123abc",
-    ]);
-    assert!(cli.is_ok(), "weights show --hotkey: {:?}", cli.err());
-}
-
-#[test]
-fn parse_weights_show_with_limit() {
-    let cli = agcli::cli::Cli::try_parse_from([
-        "agcli", "weights", "show", "--netuid", "97", "--limit", "10",
-    ]);
-    assert!(cli.is_ok(), "weights show --limit: {:?}", cli.err());
-}
 
 #[test]
 fn parse_view_metagraph() {
@@ -3142,14 +3121,6 @@ fn parse_view_axon_by_uid() {
     let cli =
         agcli::cli::Cli::try_parse_from(["agcli", "view", "axon", "--netuid", "97", "--uid", "42"]);
     assert!(cli.is_ok(), "view axon --uid: {:?}", cli.err());
-}
-
-#[test]
-fn parse_view_axon_by_hotkey() {
-    let cli = agcli::cli::Cli::try_parse_from([
-        "agcli", "view", "axon", "--netuid", "97", "--hotkey", "5Cai123",
-    ]);
-    assert!(cli.is_ok(), "view axon --hotkey: {:?}", cli.err());
 }
 
 #[test]
@@ -4118,4 +4089,1547 @@ fn parse_stake_add_with_proxy() {
     ]);
     assert!(cli.is_ok(), "{:?}", cli.err());
     assert!(cli.unwrap().proxy.is_some());
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// Batch 3: Comprehensive subnet command edge cases
+// ══════════════════════════════════════════════════════════════════════
+
+// ── subnet list edge cases ──
+
+#[test]
+fn parse_subnet_list_with_at_block() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "list", "--at-block", "1000000",
+    ]);
+    assert!(cli.is_ok(), "list --at-block: {:?}", cli.err());
+}
+
+#[test]
+fn parse_subnet_list_with_json_output() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--output", "json", "subnet", "list",
+    ]);
+    assert!(cli.is_ok(), "list --output json: {:?}", cli.err());
+}
+
+#[test]
+fn parse_subnet_list_at_block_zero() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "list", "--at-block", "0",
+    ]);
+    assert!(cli.is_ok(), "list --at-block 0: {:?}", cli.err());
+}
+
+#[test]
+fn parse_subnet_list_at_block_overflow() {
+    // u32::MAX+1 should fail
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "list", "--at-block", "4294967296",
+    ]);
+    assert!(cli.is_err(), "at-block overflow should fail");
+}
+
+// ── subnet show edge cases ──
+
+#[test]
+fn parse_subnet_show_missing_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "subnet", "show"]);
+    assert!(cli.is_err(), "show without --netuid should fail");
+}
+
+#[test]
+fn parse_subnet_show_netuid_zero() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "show", "--netuid", "0",
+    ]);
+    assert!(cli.is_ok(), "show netuid 0 (root): {:?}", cli.err());
+}
+
+#[test]
+fn parse_subnet_show_netuid_max() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "show", "--netuid", "65535",
+    ]);
+    assert!(cli.is_ok(), "show netuid max: {:?}", cli.err());
+}
+
+#[test]
+fn parse_subnet_show_netuid_overflow() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "show", "--netuid", "65536",
+    ]);
+    assert!(cli.is_err(), "netuid overflow u16 should fail");
+}
+
+#[test]
+fn parse_subnet_show_netuid_negative() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "show", "--netuid", "-1",
+    ]);
+    assert!(cli.is_err(), "negative netuid should fail");
+}
+
+#[test]
+fn parse_subnet_show_netuid_non_numeric() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "show", "--netuid", "abc",
+    ]);
+    assert!(cli.is_err(), "non-numeric netuid should fail");
+}
+
+#[test]
+fn parse_subnet_show_with_at_block() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "show", "--netuid", "1", "--at-block", "500000",
+    ]);
+    assert!(cli.is_ok(), "show with --at-block: {:?}", cli.err());
+}
+
+// ── subnet hyperparams edge cases ──
+
+#[test]
+fn parse_subnet_hyperparams_missing_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "subnet", "hyperparams"]);
+    assert!(cli.is_err(), "hyperparams without --netuid should fail");
+}
+
+#[test]
+fn parse_subnet_hyperparams_with_global_flags() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--verbose", "--output", "json", "subnet", "hyperparams", "--netuid", "1",
+    ]);
+    assert!(cli.is_ok(), "hyperparams with global flags: {:?}", cli.err());
+}
+
+// ── subnet metagraph edge cases ──
+
+#[test]
+fn parse_subnet_metagraph_with_uid() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "metagraph", "--netuid", "1", "--uid", "0",
+    ]);
+    assert!(cli.is_ok(), "metagraph with --uid: {:?}", cli.err());
+}
+
+#[test]
+fn parse_subnet_metagraph_full_flag() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "metagraph", "--netuid", "1", "--full",
+    ]);
+    assert!(cli.is_ok(), "metagraph --full: {:?}", cli.err());
+}
+
+#[test]
+fn parse_subnet_metagraph_save_flag() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "metagraph", "--netuid", "1", "--save",
+    ]);
+    assert!(cli.is_ok(), "metagraph --save: {:?}", cli.err());
+}
+
+#[test]
+fn parse_subnet_metagraph_all_opts() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "metagraph", "--netuid", "97",
+        "--uid", "10", "--at-block", "1000", "--full", "--save",
+    ]);
+    assert!(cli.is_ok(), "metagraph all opts: {:?}", cli.err());
+}
+
+#[test]
+fn parse_subnet_metagraph_uid_max() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "metagraph", "--netuid", "1", "--uid", "65535",
+    ]);
+    assert!(cli.is_ok(), "metagraph uid max: {:?}", cli.err());
+}
+
+#[test]
+fn parse_subnet_metagraph_uid_overflow() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "metagraph", "--netuid", "1", "--uid", "65536",
+    ]);
+    assert!(cli.is_err(), "metagraph uid overflow should fail");
+}
+
+// ── subnet cache commands edge cases ──
+
+#[test]
+fn parse_subnet_cache_load_missing_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "subnet", "cache-load"]);
+    assert!(cli.is_err(), "cache-load without --netuid should fail");
+}
+
+#[test]
+fn parse_subnet_cache_load_with_block() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "cache-load", "--netuid", "1", "--block", "5000000",
+    ]);
+    assert!(cli.is_ok(), "cache-load block: {:?}", cli.err());
+}
+
+#[test]
+fn parse_subnet_cache_list_missing_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "subnet", "cache-list"]);
+    assert!(cli.is_err(), "cache-list without --netuid should fail");
+}
+
+#[test]
+fn parse_subnet_cache_diff_all_blocks() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "cache-diff", "--netuid", "1",
+        "--from-block", "100000", "--to-block", "200000",
+    ]);
+    assert!(cli.is_ok(), "cache-diff with blocks: {:?}", cli.err());
+}
+
+#[test]
+fn parse_subnet_cache_diff_missing_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "subnet", "cache-diff"]);
+    assert!(cli.is_err(), "cache-diff without --netuid should fail");
+}
+
+#[test]
+fn parse_subnet_cache_prune_custom_keep() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "cache-prune", "--netuid", "1", "--keep", "5",
+    ]);
+    assert!(cli.is_ok(), "cache-prune --keep 5: {:?}", cli.err());
+}
+
+#[test]
+fn parse_subnet_cache_prune_missing_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "subnet", "cache-prune"]);
+    assert!(cli.is_err(), "cache-prune without --netuid should fail");
+}
+
+#[test]
+fn parse_subnet_cache_prune_keep_zero() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "cache-prune", "--netuid", "1", "--keep", "0",
+    ]);
+    assert!(cli.is_ok(), "cache-prune --keep 0: {:?}", cli.err());
+}
+
+// ── subnet probe edge cases ──
+
+#[test]
+fn parse_subnet_probe_basic() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "probe", "--netuid", "1",
+    ]);
+    assert!(cli.is_ok(), "probe basic: {:?}", cli.err());
+}
+
+#[test]
+fn parse_subnet_probe_with_uids() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "probe", "--netuid", "1", "--uids", "0,1,5,10",
+    ]);
+    assert!(cli.is_ok(), "probe --uids: {:?}", cli.err());
+}
+
+#[test]
+fn parse_subnet_probe_custom_timeout() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "probe", "--netuid", "1", "--timeout-ms", "10000",
+    ]);
+    assert!(cli.is_ok(), "probe --timeout-ms: {:?}", cli.err());
+}
+
+#[test]
+fn parse_subnet_probe_custom_concurrency() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "probe", "--netuid", "1", "--concurrency", "64",
+    ]);
+    assert!(cli.is_ok(), "probe --concurrency: {:?}", cli.err());
+}
+
+#[test]
+fn parse_subnet_probe_all_opts() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "probe", "--netuid", "97",
+        "--uids", "0,1,2", "--timeout-ms", "5000", "--concurrency", "16",
+    ]);
+    assert!(cli.is_ok(), "probe all opts: {:?}", cli.err());
+}
+
+#[test]
+fn parse_subnet_probe_missing_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "subnet", "probe"]);
+    assert!(cli.is_err(), "probe without --netuid should fail");
+}
+
+// ── subnet register edge cases ──
+
+#[test]
+fn parse_subnet_register_with_global_flags() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--yes", "--password", "pw", "--batch", "subnet", "register",
+    ]);
+    assert!(cli.is_ok(), "register all flags: {:?}", cli.err());
+    let cli = cli.unwrap();
+    assert!(cli.yes);
+    assert!(cli.batch);
+}
+
+// ── subnet register-neuron edge cases ──
+
+#[test]
+fn parse_subnet_register_neuron_missing_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "subnet", "register-neuron"]);
+    assert!(cli.is_err(), "register-neuron without --netuid should fail");
+}
+
+#[test]
+fn parse_subnet_register_neuron_netuid_zero() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "register-neuron", "--netuid", "0",
+    ]);
+    assert!(cli.is_ok(), "register-neuron netuid 0: {:?}", cli.err());
+}
+
+#[test]
+fn parse_subnet_register_neuron_with_dry_run() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--dry-run", "subnet", "register-neuron", "--netuid", "1",
+    ]);
+    assert!(cli.is_ok(), "{:?}", cli.err());
+    assert!(cli.unwrap().dry_run);
+}
+
+// ── subnet pow edge cases ──
+
+#[test]
+fn parse_subnet_pow_missing_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "subnet", "pow"]);
+    assert!(cli.is_err(), "pow without --netuid should fail");
+}
+
+#[test]
+fn parse_subnet_pow_custom_threads() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "pow", "--netuid", "1", "--threads", "16",
+    ]);
+    assert!(cli.is_ok(), "pow --threads 16: {:?}", cli.err());
+}
+
+#[test]
+fn parse_subnet_pow_one_thread() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "pow", "--netuid", "1", "--threads", "1",
+    ]);
+    assert!(cli.is_ok(), "pow --threads 1: {:?}", cli.err());
+}
+
+#[test]
+fn parse_subnet_pow_zero_threads() {
+    // 0 thread should parse (runtime may reject)
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "pow", "--netuid", "1", "--threads", "0",
+    ]);
+    assert!(cli.is_ok(), "pow --threads 0: {:?}", cli.err());
+}
+
+// ── subnet dissolve edge cases ──
+
+#[test]
+fn parse_subnet_dissolve_missing_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "subnet", "dissolve"]);
+    assert!(cli.is_err(), "dissolve without --netuid should fail");
+}
+
+#[test]
+fn parse_subnet_dissolve_with_batch() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--yes", "--batch", "subnet", "dissolve", "--netuid", "5",
+    ]);
+    assert!(cli.is_ok(), "dissolve with batch: {:?}", cli.err());
+}
+
+// ── subnet watch edge cases ──
+
+#[test]
+fn parse_subnet_watch_missing_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "subnet", "watch"]);
+    assert!(cli.is_err(), "watch without --netuid should fail");
+}
+
+#[test]
+fn parse_subnet_watch_default_interval() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "watch", "--netuid", "1",
+    ]);
+    assert!(cli.is_ok(), "watch default interval: {:?}", cli.err());
+}
+
+#[test]
+fn parse_subnet_watch_one_sec_interval() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "watch", "--netuid", "1", "--interval", "1",
+    ]);
+    assert!(cli.is_ok(), "watch --interval 1: {:?}", cli.err());
+}
+
+// ── subnet liquidity edge cases ──
+
+#[test]
+fn parse_subnet_liquidity_missing_netuid_ok() {
+    // netuid is optional for all-subnet view
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "subnet", "liquidity"]);
+    assert!(cli.is_ok(), "liquidity without netuid (all): {:?}", cli.err());
+}
+
+#[test]
+fn parse_subnet_liquidity_with_json() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--output", "json", "subnet", "liquidity", "--netuid", "1",
+    ]);
+    assert!(cli.is_ok(), "liquidity json: {:?}", cli.err());
+}
+
+// ── subnet monitor edge cases ──
+
+#[test]
+fn parse_subnet_monitor_missing_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "subnet", "monitor"]);
+    assert!(cli.is_err(), "monitor without --netuid should fail");
+}
+
+#[test]
+fn parse_subnet_monitor_all_opts() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "monitor", "--netuid", "97",
+        "--interval", "60", "--json",
+    ]);
+    assert!(cli.is_ok(), "monitor all opts: {:?}", cli.err());
+}
+
+// ── subnet health edge cases ──
+
+#[test]
+fn parse_subnet_health_missing_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "subnet", "health"]);
+    assert!(cli.is_err(), "health without --netuid should fail");
+}
+
+#[test]
+fn parse_subnet_health_with_json() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--output", "json", "subnet", "health", "--netuid", "1",
+    ]);
+    assert!(cli.is_ok(), "health json: {:?}", cli.err());
+}
+
+// ── subnet emissions edge cases ──
+
+#[test]
+fn parse_subnet_emissions_missing_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "subnet", "emissions"]);
+    assert!(cli.is_err(), "emissions without --netuid should fail");
+}
+
+// ── subnet cost edge cases ──
+
+#[test]
+fn parse_subnet_cost_missing_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "subnet", "cost"]);
+    assert!(cli.is_err(), "cost without --netuid should fail");
+}
+
+#[test]
+fn parse_subnet_cost_with_json() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--output", "json", "subnet", "cost", "--netuid", "42",
+    ]);
+    assert!(cli.is_ok(), "cost json: {:?}", cli.err());
+}
+
+// ── subnet commits edge cases ──
+
+#[test]
+fn parse_subnet_commits_missing_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "subnet", "commits"]);
+    assert!(cli.is_err(), "commits without --netuid should fail");
+}
+
+#[test]
+fn parse_subnet_commits_with_json() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--output", "json", "subnet", "commits", "--netuid", "1",
+        "--hotkey", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(cli.is_ok(), "commits json + hotkey: {:?}", cli.err());
+}
+
+// ── subnet set-param comprehensive edge cases ──
+
+#[test]
+fn parse_subnet_set_param_u64_value() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "set-param", "--netuid", "1",
+        "--param", "min_difficulty", "--value", "18446744073709551615",
+    ]);
+    assert!(cli.is_ok(), "set-param u64 max: {:?}", cli.err());
+}
+
+#[test]
+fn parse_subnet_set_param_all_bool_variants() {
+    for val in &["true", "false", "1", "0", "yes", "no", "on", "off"] {
+        let cli = agcli::cli::Cli::try_parse_from([
+            "agcli", "subnet", "set-param", "--netuid", "1",
+            "--param", "registration_allowed", "--value", val,
+        ]);
+        assert!(cli.is_ok(), "set-param bool {} should parse: {:?}", val, cli.err());
+    }
+}
+
+#[test]
+fn parse_subnet_set_param_with_batch_and_yes() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--yes", "--batch", "subnet", "set-param",
+        "--netuid", "1", "--param", "tempo", "--value", "100",
+    ]);
+    assert!(cli.is_ok(), "set-param batch+yes: {:?}", cli.err());
+    let cli = cli.unwrap();
+    assert!(cli.yes);
+    assert!(cli.batch);
+}
+
+// ── subnet set-symbol edge cases ──
+
+#[test]
+fn parse_subnet_set_symbol() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "set-symbol", "--netuid", "1", "--symbol", "ALPHA",
+    ]);
+    assert!(cli.is_ok(), "set-symbol: {:?}", cli.err());
+}
+
+#[test]
+fn parse_subnet_set_symbol_missing_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "set-symbol", "--symbol", "ALPHA",
+    ]);
+    assert!(cli.is_err(), "set-symbol without --netuid should fail");
+}
+
+#[test]
+fn parse_subnet_set_symbol_missing_symbol() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "set-symbol", "--netuid", "1",
+    ]);
+    assert!(cli.is_err(), "set-symbol without --symbol should fail");
+}
+
+#[test]
+fn parse_subnet_set_symbol_empty_string() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "set-symbol", "--netuid", "1", "--symbol", "",
+    ]);
+    // Empty string should parse (validation at runtime)
+    assert!(cli.is_ok(), "set-symbol empty: {:?}", cli.err());
+}
+
+#[test]
+fn parse_subnet_set_symbol_long_name() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "set-symbol", "--netuid", "1",
+        "--symbol", "VERYLONGSYMBOLNAME",
+    ]);
+    assert!(cli.is_ok(), "set-symbol long: {:?}", cli.err());
+}
+
+// ── subnet emission-split edge cases ──
+
+#[test]
+fn parse_subnet_emission_split_missing_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "subnet", "emission-split"]);
+    assert!(cli.is_err(), "emission-split without --netuid should fail");
+}
+
+// ── subnet trim edge cases ──
+
+#[test]
+fn parse_subnet_trim_missing_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "trim", "--max-uids", "256",
+    ]);
+    assert!(cli.is_err(), "trim without --netuid should fail");
+}
+
+#[test]
+fn parse_subnet_trim_missing_max_uids() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "trim", "--netuid", "1",
+    ]);
+    assert!(cli.is_err(), "trim without --max-uids should fail");
+}
+
+#[test]
+fn parse_subnet_trim_zero_max_uids() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "trim", "--netuid", "1", "--max-uids", "0",
+    ]);
+    assert!(cli.is_ok(), "trim --max-uids 0: {:?}", cli.err());
+}
+
+#[test]
+fn parse_subnet_trim_max_uids_overflow() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "trim", "--netuid", "1", "--max-uids", "65536",
+    ]);
+    assert!(cli.is_err(), "trim --max-uids overflow should fail");
+}
+
+// ── subnet check-start edge cases ──
+
+#[test]
+fn parse_subnet_check_start_missing_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "subnet", "check-start"]);
+    assert!(cli.is_err(), "check-start without --netuid should fail");
+}
+
+#[test]
+fn parse_subnet_check_start_with_json() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--output", "json", "subnet", "check-start", "--netuid", "5",
+    ]);
+    assert!(cli.is_ok(), "check-start json: {:?}", cli.err());
+}
+
+// ── subnet start edge cases ──
+
+#[test]
+fn parse_subnet_start_missing_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "subnet", "start"]);
+    assert!(cli.is_err(), "start without --netuid should fail");
+}
+
+// ── subnet mechanism-count edge cases ──
+
+#[test]
+fn parse_subnet_mechanism_count_missing_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "subnet", "mechanism-count"]);
+    assert!(cli.is_err(), "mechanism-count without --netuid should fail");
+}
+
+// ── subnet set-mechanism-count edge cases ──
+
+#[test]
+fn parse_subnet_set_mechanism_count_missing_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "set-mechanism-count", "--count", "2",
+    ]);
+    assert!(cli.is_err(), "set-mechanism-count without --netuid should fail");
+}
+
+#[test]
+fn parse_subnet_set_mechanism_count_missing_count() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "set-mechanism-count", "--netuid", "1",
+    ]);
+    assert!(cli.is_err(), "set-mechanism-count without --count should fail");
+}
+
+#[test]
+fn parse_subnet_set_mechanism_count_zero() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "set-mechanism-count", "--netuid", "1", "--count", "0",
+    ]);
+    assert!(cli.is_ok(), "set-mechanism-count 0: {:?}", cli.err());
+}
+
+// ── subnet set-emission-split edge cases ──
+
+#[test]
+fn parse_subnet_set_emission_split_missing_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "set-emission-split", "--weights", "50,50",
+    ]);
+    assert!(cli.is_err(), "set-emission-split without --netuid should fail");
+}
+
+#[test]
+fn parse_subnet_set_emission_split_missing_weights() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "set-emission-split", "--netuid", "1",
+    ]);
+    assert!(cli.is_err(), "set-emission-split without --weights should fail");
+}
+
+#[test]
+fn parse_subnet_set_emission_split_three_way() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "set-emission-split", "--netuid", "1", "--weights", "33,33,34",
+    ]);
+    assert!(cli.is_ok(), "emission-split 3-way: {:?}", cli.err());
+}
+
+#[test]
+fn parse_subnet_set_emission_split_single() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "set-emission-split", "--netuid", "1", "--weights", "100",
+    ]);
+    assert!(cli.is_ok(), "emission-split single: {:?}", cli.err());
+}
+
+// ── subnet snipe missing netuid ──
+
+#[test]
+fn parse_subnet_snipe_missing_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "subnet", "snipe"]);
+    assert!(cli.is_err(), "snipe without --netuid should fail");
+}
+
+#[test]
+fn parse_subnet_snipe_max_cost_zero() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "snipe", "--netuid", "1", "--max-cost", "0.0",
+    ]);
+    assert!(cli.is_ok(), "snipe --max-cost 0: {:?}", cli.err());
+}
+
+#[test]
+fn parse_subnet_snipe_max_cost_negative() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "snipe", "--netuid", "1", "--max-cost", "-1.0",
+    ]);
+    // Clap rejects negative floats (treats -1.0 as unknown arg) — catches user error early
+    assert!(cli.is_err(), "snipe --max-cost -1 should be rejected by clap");
+}
+
+#[test]
+fn parse_subnet_snipe_max_attempts_zero() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "snipe", "--netuid", "1", "--max-attempts", "0",
+    ]);
+    assert!(cli.is_ok(), "snipe --max-attempts 0: {:?}", cli.err());
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// Batch 4: Weight commands comprehensive tests
+// ══════════════════════════════════════════════════════════════════════
+
+// ── weights set edge cases ──
+
+#[test]
+fn parse_weights_set_basic() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "weights", "set", "--netuid", "1", "--weights", "0:100,1:200",
+    ]);
+    assert!(cli.is_ok(), "weights set: {:?}", cli.err());
+}
+
+#[test]
+fn parse_weights_set_missing_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "weights", "set", "--weights", "0:100",
+    ]);
+    assert!(cli.is_err(), "weights set without --netuid should fail");
+}
+
+#[test]
+fn parse_weights_set_missing_weights() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "weights", "set", "--netuid", "1",
+    ]);
+    assert!(cli.is_err(), "weights set without --weights should fail");
+}
+
+#[test]
+fn parse_weights_set_with_version_key() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "weights", "set", "--netuid", "1",
+        "--weights", "0:100", "--version-key", "42",
+    ]);
+    assert!(cli.is_ok(), "weights set --version-key: {:?}", cli.err());
+}
+
+#[test]
+fn parse_weights_set_stdin() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "weights", "set", "--netuid", "1", "--weights", "-",
+    ]);
+    assert!(cli.is_ok(), "weights set stdin: {:?}", cli.err());
+}
+
+#[test]
+fn parse_weights_set_file_path() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "weights", "set", "--netuid", "1", "--weights", "@weights.json",
+    ]);
+    assert!(cli.is_ok(), "weights set file: {:?}", cli.err());
+}
+
+#[test]
+fn parse_weights_set_single_weight() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "weights", "set", "--netuid", "1", "--weights", "0:65535",
+    ]);
+    assert!(cli.is_ok(), "weights set single: {:?}", cli.err());
+}
+
+#[test]
+fn parse_weights_set_with_all_global_flags() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--yes", "--password", "pw", "--batch", "--dry-run",
+        "weights", "set", "--netuid", "1", "--weights", "0:100",
+    ]);
+    assert!(cli.is_ok(), "weights set all flags: {:?}", cli.err());
+    let cli = cli.unwrap();
+    assert!(cli.yes);
+    assert!(cli.batch);
+    assert!(cli.dry_run);
+}
+
+// ── weights commit edge cases ──
+
+#[test]
+fn parse_weights_commit_basic() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "weights", "commit", "--netuid", "1", "--weights", "0:100,1:200",
+    ]);
+    assert!(cli.is_ok(), "weights commit: {:?}", cli.err());
+}
+
+#[test]
+fn parse_weights_commit_missing_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "weights", "commit", "--weights", "0:100",
+    ]);
+    assert!(cli.is_err(), "commit without --netuid should fail");
+}
+
+#[test]
+fn parse_weights_commit_missing_weights() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "weights", "commit", "--netuid", "1",
+    ]);
+    assert!(cli.is_err(), "commit without --weights should fail");
+}
+
+// ── weights reveal edge cases ──
+
+#[test]
+fn parse_weights_reveal_basic() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "weights", "reveal", "--netuid", "1",
+        "--weights", "0:100,1:200", "--salt", "mysalt",
+    ]);
+    assert!(cli.is_ok(), "weights reveal: {:?}", cli.err());
+}
+
+#[test]
+fn parse_weights_reveal_missing_salt() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "weights", "reveal", "--netuid", "1", "--weights", "0:100",
+    ]);
+    assert!(cli.is_err(), "reveal without --salt should fail");
+}
+
+#[test]
+fn parse_weights_reveal_missing_weights() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "weights", "reveal", "--netuid", "1", "--salt", "abc",
+    ]);
+    assert!(cli.is_err(), "reveal without --weights should fail");
+}
+
+#[test]
+fn parse_weights_reveal_with_version_key() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "weights", "reveal", "--netuid", "1",
+        "--weights", "0:100", "--salt", "abc", "--version-key", "99",
+    ]);
+    assert!(cli.is_ok(), "reveal --version-key: {:?}", cli.err());
+}
+
+// ── weights show edge cases ──
+
+#[test]
+fn parse_weights_show_basic() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "weights", "show", "--netuid", "1",
+    ]);
+    assert!(cli.is_ok(), "weights show: {:?}", cli.err());
+}
+
+#[test]
+fn parse_weights_show_with_hotkey() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "weights", "show", "--netuid", "1",
+        "--hotkey", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(cli.is_ok(), "weights show --hotkey: {:?}", cli.err());
+}
+
+#[test]
+fn parse_weights_show_all_opts() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--output", "json", "weights", "show", "--netuid", "97",
+        "--hotkey", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        "--limit", "5",
+    ]);
+    assert!(cli.is_ok(), "weights show all: {:?}", cli.err());
+}
+
+#[test]
+fn parse_weights_show_missing_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "weights", "show"]);
+    assert!(cli.is_err(), "weights show without --netuid should fail");
+}
+
+// ── weights status edge cases ──
+
+#[test]
+fn parse_weights_status_basic() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "weights", "status", "--netuid", "1",
+    ]);
+    assert!(cli.is_ok(), "weights status: {:?}", cli.err());
+}
+
+#[test]
+fn parse_weights_status_missing_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "weights", "status"]);
+    assert!(cli.is_err(), "weights status without --netuid should fail");
+}
+
+// ── weights commit-reveal (atomic) edge cases ──
+
+#[test]
+fn parse_weights_commit_reveal_basic() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "weights", "commit-reveal", "--netuid", "1", "--weights", "0:100",
+    ]);
+    assert!(cli.is_ok(), "commit-reveal basic: {:?}", cli.err());
+}
+
+#[test]
+fn parse_weights_commit_reveal_with_wait() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "weights", "commit-reveal", "--netuid", "1",
+        "--weights", "0:100,1:200", "--wait",
+    ]);
+    assert!(cli.is_ok(), "commit-reveal --wait: {:?}", cli.err());
+}
+
+#[test]
+fn parse_weights_commit_reveal_with_version_key() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "weights", "commit-reveal", "--netuid", "1",
+        "--weights", "0:100", "--version-key", "42",
+    ]);
+    assert!(cli.is_ok(), "commit-reveal --version-key: {:?}", cli.err());
+}
+
+#[test]
+fn parse_weights_commit_reveal_missing_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "weights", "commit-reveal", "--weights", "0:100",
+    ]);
+    assert!(cli.is_err(), "commit-reveal without --netuid should fail");
+}
+
+#[test]
+fn parse_weights_commit_reveal_missing_weights() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "weights", "commit-reveal", "--netuid", "1",
+    ]);
+    assert!(cli.is_err(), "commit-reveal without --weights should fail");
+}
+
+#[test]
+fn parse_weights_commit_reveal_stdin() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "weights", "commit-reveal", "--netuid", "1", "--weights", "-",
+    ]);
+    assert!(cli.is_ok(), "commit-reveal stdin: {:?}", cli.err());
+}
+
+#[test]
+fn parse_weights_commit_reveal_file() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "weights", "commit-reveal", "--netuid", "1", "--weights", "@weights.json",
+    ]);
+    assert!(cli.is_ok(), "commit-reveal file: {:?}", cli.err());
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// Batch 5: Delegate, proxy, root, identity, serve commands
+// ══════════════════════════════════════════════════════════════════════
+
+// ── delegate show ──
+
+#[test]
+fn parse_delegate_show_with_hotkey() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "delegate", "show",
+        "--hotkey", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(cli.is_ok(), "delegate show --hotkey: {:?}", cli.err());
+}
+
+// ── delegate list ──
+
+#[test]
+fn parse_delegate_list_with_json() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--output", "json", "delegate", "list",
+    ]);
+    assert!(cli.is_ok(), "delegate list json: {:?}", cli.err());
+}
+
+// ── delegate decrease-take ──
+
+#[test]
+fn parse_delegate_decrease_take_basic() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "delegate", "decrease-take", "--take", "5.0",
+    ]);
+    assert!(cli.is_ok(), "decrease-take: {:?}", cli.err());
+}
+
+#[test]
+fn parse_delegate_decrease_take_with_hotkey() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "delegate", "decrease-take", "--take", "10.0",
+        "--hotkey", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(cli.is_ok(), "decrease-take --hotkey: {:?}", cli.err());
+}
+
+#[test]
+fn parse_delegate_decrease_take_missing_take() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "delegate", "decrease-take"]);
+    assert!(cli.is_err(), "decrease-take without --take should fail");
+}
+
+#[test]
+fn parse_delegate_decrease_take_zero() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "delegate", "decrease-take", "--take", "0.0",
+    ]);
+    assert!(cli.is_ok(), "decrease-take 0: {:?}", cli.err());
+}
+
+// ── delegate increase-take ──
+
+#[test]
+fn parse_delegate_increase_take_basic() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "delegate", "increase-take", "--take", "15.0",
+    ]);
+    assert!(cli.is_ok(), "increase-take: {:?}", cli.err());
+}
+
+#[test]
+fn parse_delegate_increase_take_missing_take() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "delegate", "increase-take"]);
+    assert!(cli.is_err(), "increase-take without --take should fail");
+}
+
+// ── root commands ──
+
+#[test]
+fn parse_root_weights() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "root", "weights", "--weights", "1:100,2:200",
+    ]);
+    assert!(cli.is_ok(), "root weights: {:?}", cli.err());
+}
+
+#[test]
+fn parse_root_weights_missing_weights() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "root", "weights"]);
+    assert!(cli.is_err(), "root weights without --weights should fail");
+}
+
+#[test]
+fn parse_root_register_with_global_flags() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--yes", "--password", "pw", "root", "register",
+    ]);
+    assert!(cli.is_ok(), "root register flags: {:?}", cli.err());
+}
+
+// ── identity commands ──
+
+#[test]
+fn parse_identity_set_basic() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "identity", "set", "--name", "MyValidator",
+    ]);
+    assert!(cli.is_ok(), "identity set: {:?}", cli.err());
+}
+
+#[test]
+fn parse_identity_set_all_fields() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "identity", "set", "--name", "MyValidator",
+        "--url", "https://example.com", "--github", "myuser",
+        "--description", "My awesome validator",
+    ]);
+    assert!(cli.is_ok(), "identity set all: {:?}", cli.err());
+}
+
+#[test]
+fn parse_identity_set_missing_name() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "identity", "set", "--url", "https://example.com",
+    ]);
+    assert!(cli.is_err(), "identity set without --name should fail");
+}
+
+#[test]
+fn parse_identity_show_missing_address() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "identity", "show"]);
+    assert!(cli.is_err(), "identity show without --address should fail");
+}
+
+#[test]
+fn parse_identity_set_subnet_all_fields() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "identity", "set-subnet", "--netuid", "1", "--name", "MySN",
+        "--github", "myrepo", "--url", "https://sn1.example.com",
+    ]);
+    assert!(cli.is_ok(), "identity set-subnet all: {:?}", cli.err());
+}
+
+#[test]
+fn parse_identity_set_subnet_missing_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "identity", "set-subnet", "--name", "MySN",
+    ]);
+    assert!(cli.is_err(), "set-subnet without --netuid should fail");
+}
+
+#[test]
+fn parse_identity_set_subnet_missing_name() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "identity", "set-subnet", "--netuid", "1",
+    ]);
+    assert!(cli.is_err(), "set-subnet without --name should fail");
+}
+
+// ── serve commands ──
+
+#[test]
+fn parse_serve_axon_basic() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "serve", "axon", "--netuid", "1",
+        "--ip", "192.168.1.1", "--port", "8091",
+    ]);
+    assert!(cli.is_ok(), "serve axon: {:?}", cli.err());
+}
+
+#[test]
+fn parse_serve_axon_all_opts() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "serve", "axon", "--netuid", "1",
+        "--ip", "10.0.0.1", "--port", "8091",
+        "--protocol", "4", "--version", "1",
+    ]);
+    assert!(cli.is_ok(), "serve axon all: {:?}", cli.err());
+}
+
+#[test]
+fn parse_serve_axon_missing_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "serve", "axon", "--ip", "1.2.3.4", "--port", "8091",
+    ]);
+    assert!(cli.is_err(), "serve axon without --netuid should fail");
+}
+
+#[test]
+fn parse_serve_axon_missing_ip() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "serve", "axon", "--netuid", "1", "--port", "8091",
+    ]);
+    assert!(cli.is_err(), "serve axon without --ip should fail");
+}
+
+#[test]
+fn parse_serve_axon_missing_port() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "serve", "axon", "--netuid", "1", "--ip", "1.2.3.4",
+    ]);
+    assert!(cli.is_err(), "serve axon without --port should fail");
+}
+
+#[test]
+fn parse_serve_axon_port_overflow() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "serve", "axon", "--netuid", "1",
+        "--ip", "1.2.3.4", "--port", "65536",
+    ]);
+    assert!(cli.is_err(), "serve axon port overflow should fail");
+}
+
+#[test]
+fn parse_serve_axon_port_zero() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "serve", "axon", "--netuid", "1",
+        "--ip", "0.0.0.0", "--port", "0",
+    ]);
+    assert!(cli.is_ok(), "serve axon port 0: {:?}", cli.err());
+}
+
+#[test]
+fn parse_serve_reset_missing_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "serve", "reset"]);
+    assert!(cli.is_err(), "serve reset without --netuid should fail");
+}
+
+#[test]
+fn parse_serve_batch_axon_missing_file() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "serve", "batch-axon"]);
+    assert!(cli.is_err(), "batch-axon without --file should fail");
+}
+
+// ── proxy commands ──
+
+#[test]
+fn parse_proxy_add_basic() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "proxy", "add",
+        "--delegate", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(cli.is_ok(), "proxy add: {:?}", cli.err());
+}
+
+#[test]
+fn parse_proxy_add_all_opts() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "proxy", "add",
+        "--delegate", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        "--proxy-type", "staking", "--delay", "100",
+    ]);
+    assert!(cli.is_ok(), "proxy add all: {:?}", cli.err());
+}
+
+#[test]
+fn parse_proxy_add_missing_delegate() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "proxy", "add", "--proxy-type", "any",
+    ]);
+    assert!(cli.is_err(), "proxy add without --delegate should fail");
+}
+
+#[test]
+fn parse_proxy_remove_basic() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "proxy", "remove",
+        "--delegate", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(cli.is_ok(), "proxy remove: {:?}", cli.err());
+}
+
+#[test]
+fn parse_proxy_remove_missing_delegate() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "proxy", "remove"]);
+    assert!(cli.is_err(), "proxy remove without --delegate should fail");
+}
+
+#[test]
+fn parse_proxy_create_pure_defaults() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "proxy", "create-pure"]);
+    assert!(cli.is_ok(), "proxy create-pure defaults: {:?}", cli.err());
+}
+
+#[test]
+fn parse_proxy_create_pure_all_opts() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "proxy", "create-pure",
+        "--proxy-type", "staking", "--delay", "50", "--index", "3",
+    ]);
+    assert!(cli.is_ok(), "proxy create-pure all: {:?}", cli.err());
+}
+
+#[test]
+fn parse_proxy_kill_pure() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "proxy", "kill-pure",
+        "--spawner", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        "--height", "1000", "--ext-index", "2",
+    ]);
+    assert!(cli.is_ok(), "proxy kill-pure: {:?}", cli.err());
+}
+
+#[test]
+fn parse_proxy_kill_pure_missing_spawner() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "proxy", "kill-pure", "--height", "1000", "--ext-index", "2",
+    ]);
+    assert!(cli.is_err(), "kill-pure without --spawner should fail");
+}
+
+#[test]
+fn parse_proxy_kill_pure_missing_height() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "proxy", "kill-pure",
+        "--spawner", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        "--ext-index", "2",
+    ]);
+    assert!(cli.is_err(), "kill-pure without --height should fail");
+}
+
+#[test]
+fn parse_proxy_kill_pure_missing_ext_index() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "proxy", "kill-pure",
+        "--spawner", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        "--height", "1000",
+    ]);
+    assert!(cli.is_err(), "kill-pure without --ext-index should fail");
+}
+
+#[test]
+fn parse_proxy_list_default() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "proxy", "list"]);
+    assert!(cli.is_ok(), "proxy list: {:?}", cli.err());
+}
+
+#[test]
+fn parse_proxy_list_with_address() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "proxy", "list",
+        "--address", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(cli.is_ok(), "proxy list --address: {:?}", cli.err());
+}
+
+#[test]
+fn parse_proxy_announce() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "proxy", "announce",
+        "--real", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        "--call-hash", "0xabcdef1234567890",
+    ]);
+    assert!(cli.is_ok(), "proxy announce: {:?}", cli.err());
+}
+
+#[test]
+fn parse_proxy_announce_missing_real() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "proxy", "announce", "--call-hash", "0xabc",
+    ]);
+    assert!(cli.is_err(), "announce without --real should fail");
+}
+
+#[test]
+fn parse_proxy_announce_missing_call_hash() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "proxy", "announce",
+        "--real", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(cli.is_err(), "announce without --call-hash should fail");
+}
+
+#[test]
+fn parse_proxy_reject_announcement() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "proxy", "reject-announcement",
+        "--delegate", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        "--call-hash", "0xabc",
+    ]);
+    assert!(cli.is_ok(), "proxy reject: {:?}", cli.err());
+}
+
+#[test]
+fn parse_proxy_list_announcements() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "proxy", "list-announcements"]);
+    assert!(cli.is_ok(), "proxy list-announcements: {:?}", cli.err());
+}
+
+#[test]
+fn parse_proxy_list_announcements_with_address() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "proxy", "list-announcements",
+        "--address", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(cli.is_ok(), "proxy list-announcements --address: {:?}", cli.err());
+}
+
+// ── swap commands ──
+
+#[test]
+fn parse_swap_hotkey_missing_new() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "swap", "hotkey"]);
+    assert!(cli.is_err(), "swap hotkey without --new-hotkey should fail");
+}
+
+#[test]
+fn parse_swap_coldkey_missing_new() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "swap", "coldkey"]);
+    assert!(cli.is_err(), "swap coldkey without --new-coldkey should fail");
+}
+
+// ── view commands comprehensive ──
+
+#[test]
+fn parse_view_portfolio_with_address() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "view", "portfolio",
+        "--address", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(cli.is_ok(), "view portfolio --address: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_neuron_missing_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "view", "neuron", "--uid", "0",
+    ]);
+    assert!(cli.is_err(), "view neuron without --netuid should fail");
+}
+
+#[test]
+fn parse_view_neuron_missing_uid() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "view", "neuron", "--netuid", "1",
+    ]);
+    assert!(cli.is_err(), "view neuron without --uid should fail");
+}
+
+#[test]
+fn parse_view_validators_with_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "view", "validators", "--netuid", "1", "--limit", "20",
+    ]);
+    assert!(cli.is_ok(), "view validators --netuid: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_subnet_analytics_missing_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "view", "subnet-analytics"]);
+    assert!(cli.is_err(), "view subnet-analytics without --netuid should fail");
+}
+
+#[test]
+fn parse_view_swap_sim_alpha_direction() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "view", "swap-sim", "--netuid", "1", "--alpha", "100.0",
+    ]);
+    assert!(cli.is_ok(), "view swap-sim --alpha: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_swap_sim_missing_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "view", "swap-sim", "--tao", "10.0",
+    ]);
+    assert!(cli.is_err(), "view swap-sim without --netuid should fail");
+}
+
+#[test]
+fn parse_view_nominations_missing_hotkey() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "view", "nominations"]);
+    assert!(cli.is_err(), "nominations without --hotkey should fail");
+}
+
+#[test]
+fn parse_view_metagraph_with_diff() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "view", "metagraph", "--netuid", "1",
+        "--since-block", "1000000", "--limit", "10",
+    ]);
+    assert!(cli.is_ok(), "view metagraph diff: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_axon() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "view", "axon", "--netuid", "1", "--uid", "0",
+    ]);
+    assert!(cli.is_ok(), "view axon: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_axon_by_hotkey() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "view", "axon", "--netuid", "1",
+        "--hotkey", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(cli.is_ok(), "view axon --hotkey: {:?}", cli.err());
+}
+
+// ── multisig commands ──
+
+#[test]
+fn parse_multisig_address_missing_signatories() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "multisig", "address", "--threshold", "2",
+    ]);
+    assert!(cli.is_err(), "multisig without --signatories should fail");
+}
+
+#[test]
+fn parse_multisig_address_missing_threshold() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "multisig", "address",
+        "--signatories", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(cli.is_err(), "multisig without --threshold should fail");
+}
+
+#[test]
+fn parse_multisig_cancel() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "multisig", "cancel",
+        "--others", "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+        "--threshold", "2",
+        "--call-hash", "0xabc",
+        "--timepoint-height", "1000", "--timepoint-index", "1",
+    ]);
+    assert!(cli.is_ok(), "multisig cancel: {:?}", cli.err());
+}
+
+// ── transfer edge cases ──
+
+#[test]
+fn parse_transfer_with_all_flags() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--yes", "--password", "pw", "--batch", "--dry-run",
+        "transfer",
+        "--dest", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        "--amount", "1.0",
+    ]);
+    assert!(cli.is_ok(), "transfer all flags: {:?}", cli.err());
+    let cli = cli.unwrap();
+    assert!(cli.yes);
+    assert!(cli.batch);
+    assert!(cli.dry_run);
+}
+
+#[test]
+fn parse_transfer_zero_amount() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "transfer",
+        "--dest", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        "--amount", "0.0",
+    ]);
+    assert!(cli.is_ok(), "transfer zero: {:?}", cli.err());
+}
+
+#[test]
+fn parse_transfer_tiny_amount() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "transfer",
+        "--dest", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        "--amount", "0.000000001",
+    ]);
+    assert!(cli.is_ok(), "transfer 1 RAO: {:?}", cli.err());
+}
+
+#[test]
+fn parse_transfer_large_amount() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "transfer",
+        "--dest", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        "--amount", "21000000.0",
+    ]);
+    assert!(cli.is_ok(), "transfer 21M TAO: {:?}", cli.err());
 }

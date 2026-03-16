@@ -1,7 +1,10 @@
 //! Tests for CLI helper functions.
 //! Run with: cargo test --test helpers_test
 
-use agcli::cli::helpers::{parse_children, parse_weight_pairs, validate_amount, validate_take_pct};
+use agcli::cli::helpers::{
+    parse_children, parse_weight_pairs, validate_amount, validate_delegate_take,
+    validate_emission_weights, validate_max_cost, validate_symbol, validate_take_pct,
+};
 use agcli::utils::explain;
 
 #[test]
@@ -968,4 +971,180 @@ fn explain_topic_count_31() {
         "Expected at least 31 topics, got {}",
         topics.len()
     );
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// validate_symbol tests
+// ══════════════════════════════════════════════════════════════════════
+
+#[test]
+fn validate_symbol_basic() {
+    assert!(validate_symbol("ALPHA").is_ok());
+    assert!(validate_symbol("SN1").is_ok());
+    assert!(validate_symbol("TAO").is_ok());
+    assert!(validate_symbol("X").is_ok());
+}
+
+#[test]
+fn validate_symbol_empty_rejects() {
+    let result = validate_symbol("");
+    assert!(result.is_err(), "empty symbol should fail");
+    let msg = result.unwrap_err().to_string();
+    assert!(msg.contains("cannot be empty"), "message: {}", msg);
+}
+
+#[test]
+fn validate_symbol_whitespace_only_rejects() {
+    let result = validate_symbol("   ");
+    assert!(result.is_err(), "whitespace-only symbol should fail");
+}
+
+#[test]
+fn validate_symbol_too_long_rejects() {
+    let long = "A".repeat(33);
+    let result = validate_symbol(&long);
+    assert!(result.is_err(), "33-char symbol should fail");
+    let msg = result.unwrap_err().to_string();
+    assert!(msg.contains("too long"), "message: {}", msg);
+}
+
+#[test]
+fn validate_symbol_max_length_ok() {
+    let at_limit = "A".repeat(32);
+    assert!(validate_symbol(&at_limit).is_ok());
+}
+
+#[test]
+fn validate_symbol_non_ascii_rejects() {
+    let result = validate_symbol("ΑΛΦΑ");  // Greek letters
+    assert!(result.is_err(), "non-ASCII should fail");
+    let msg = result.unwrap_err().to_string();
+    assert!(msg.contains("non-ASCII"), "message: {}", msg);
+}
+
+#[test]
+fn validate_symbol_with_spaces() {
+    // Leading/trailing spaces: the trim handles it, but space inside is ok
+    assert!(validate_symbol("  ALPHA  ").is_ok(), "padded symbol should be ok after trim");
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// validate_emission_weights tests
+// ══════════════════════════════════════════════════════════════════════
+
+#[test]
+fn validate_emission_weights_basic() {
+    assert!(validate_emission_weights(&[50, 50]).is_ok());
+    assert!(validate_emission_weights(&[100]).is_ok());
+    assert!(validate_emission_weights(&[33, 33, 34]).is_ok());
+}
+
+#[test]
+fn validate_emission_weights_empty_rejects() {
+    let result = validate_emission_weights(&[]);
+    assert!(result.is_err(), "empty weights should fail");
+}
+
+#[test]
+fn validate_emission_weights_all_zeros_rejects() {
+    let result = validate_emission_weights(&[0, 0, 0]);
+    assert!(result.is_err(), "all-zero weights should fail");
+    let msg = result.unwrap_err().to_string();
+    assert!(msg.contains("total is zero"), "message: {}", msg);
+}
+
+#[test]
+fn validate_emission_weights_single_zero_rejects() {
+    let result = validate_emission_weights(&[0]);
+    assert!(result.is_err(), "single zero should fail");
+}
+
+#[test]
+fn validate_emission_weights_mixed_with_zero_ok() {
+    assert!(validate_emission_weights(&[100, 0]).is_ok());
+    assert!(validate_emission_weights(&[0, 50, 50]).is_ok());
+}
+
+#[test]
+fn validate_emission_weights_max_u16() {
+    assert!(validate_emission_weights(&[u16::MAX, u16::MAX]).is_ok());
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// validate_max_cost tests
+// ══════════════════════════════════════════════════════════════════════
+
+#[test]
+fn validate_max_cost_positive() {
+    assert!(validate_max_cost(1.0).is_ok());
+    assert!(validate_max_cost(0.01).is_ok());
+    assert!(validate_max_cost(1000.0).is_ok());
+}
+
+#[test]
+fn validate_max_cost_zero_ok() {
+    assert!(validate_max_cost(0.0).is_ok());
+}
+
+#[test]
+fn validate_max_cost_negative_rejects() {
+    let result = validate_max_cost(-1.0);
+    assert!(result.is_err(), "negative cost should fail");
+    let msg = result.unwrap_err().to_string();
+    assert!(msg.contains("cannot be negative"), "message: {}", msg);
+}
+
+#[test]
+fn validate_max_cost_nan_rejects() {
+    let result = validate_max_cost(f64::NAN);
+    assert!(result.is_err(), "NaN cost should fail");
+}
+
+#[test]
+fn validate_max_cost_infinity_rejects() {
+    let result = validate_max_cost(f64::INFINITY);
+    assert!(result.is_err(), "infinity cost should fail");
+}
+
+#[test]
+fn validate_max_cost_neg_infinity_rejects() {
+    let result = validate_max_cost(f64::NEG_INFINITY);
+    assert!(result.is_err(), "negative infinity cost should fail");
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// validate_delegate_take tests
+// ══════════════════════════════════════════════════════════════════════
+
+#[test]
+fn validate_delegate_take_valid() {
+    assert!(validate_delegate_take(0.0).is_ok());
+    assert!(validate_delegate_take(9.0).is_ok());
+    assert!(validate_delegate_take(18.0).is_ok());
+}
+
+#[test]
+fn validate_delegate_take_over_max_rejects() {
+    let result = validate_delegate_take(18.01);
+    assert!(result.is_err(), "take > 18% should fail");
+    let msg = result.unwrap_err().to_string();
+    assert!(msg.contains("Maximum allowed is 18%"), "message: {}", msg);
+}
+
+#[test]
+fn validate_delegate_take_negative_rejects() {
+    let result = validate_delegate_take(-1.0);
+    assert!(result.is_err(), "negative take should fail");
+}
+
+#[test]
+fn validate_delegate_take_nan_rejects() {
+    let result = validate_delegate_take(f64::NAN);
+    assert!(result.is_err(), "NaN take should fail");
+}
+
+#[test]
+fn validate_delegate_take_way_over_rejects() {
+    let result = validate_delegate_take(100.0);
+    assert!(result.is_err(), "100% take should fail");
 }

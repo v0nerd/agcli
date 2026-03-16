@@ -138,6 +138,7 @@ async fn change_take(
     take: f64,
     increase: bool,
 ) -> Result<()> {
+    crate::cli::helpers::validate_delegate_take(take)?;
     let (pair, hk) = unlock_and_resolve(
         ctx.wallet_dir,
         ctx.wallet_name,

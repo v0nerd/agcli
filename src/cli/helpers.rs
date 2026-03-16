@@ -150,6 +150,83 @@ pub fn validate_take_pct(take: f64) -> Result<()> {
     Ok(())
 }
 
+/// Validate a token symbol string (non-empty, reasonable length, ASCII).
+pub fn validate_symbol(symbol: &str) -> Result<()> {
+    let trimmed = symbol.trim();
+    if trimmed.is_empty() {
+        anyhow::bail!(
+            "Invalid symbol: cannot be empty.\n  Tip: use a short, uppercase token symbol like \"ALPHA\" or \"SN1\"."
+        );
+    }
+    if trimmed.len() > 32 {
+        anyhow::bail!(
+            "Invalid symbol: \"{}\" is too long ({} chars, max 32).\n  Tip: token symbols should be short, like \"ALPHA\".",
+            trimmed, trimmed.len()
+        );
+    }
+    if !trimmed.is_ascii() {
+        anyhow::bail!(
+            "Invalid symbol: \"{}\" contains non-ASCII characters. Use only ASCII letters/numbers.",
+            trimmed
+        );
+    }
+    Ok(())
+}
+
+/// Validate emission split weights (non-empty, no zeros in individual weights unless intentional).
+pub fn validate_emission_weights(weights: &[u16]) -> Result<()> {
+    if weights.is_empty() {
+        anyhow::bail!("At least one emission weight is required.");
+    }
+    let total: u64 = weights.iter().map(|w| *w as u64).sum();
+    if total == 0 {
+        anyhow::bail!(
+            "Invalid emission weights: total is zero. At least one weight must be non-zero."
+        );
+    }
+    Ok(())
+}
+
+/// Validate snipe max-cost is non-negative.
+pub fn validate_max_cost(max_cost: f64) -> Result<()> {
+    if max_cost < 0.0 {
+        anyhow::bail!(
+            "Invalid --max-cost: {:.9}. Cost limit cannot be negative.",
+            max_cost
+        );
+    }
+    if !max_cost.is_finite() {
+        anyhow::bail!(
+            "Invalid --max-cost: must be a finite number (got {}).",
+            max_cost
+        );
+    }
+    Ok(())
+}
+
+/// Validate a delegate take percentage is in the allowed range [0, 18].
+pub fn validate_delegate_take(take: f64) -> Result<()> {
+    if take < 0.0 {
+        anyhow::bail!(
+            "Invalid delegate take: {:.2}%. Take cannot be negative.",
+            take
+        );
+    }
+    if take > 18.0 {
+        anyhow::bail!(
+            "Invalid delegate take: {:.2}%. Maximum allowed is 18%.\n  Tip: use --take 18 for maximum.",
+            take
+        );
+    }
+    if !take.is_finite() {
+        anyhow::bail!(
+            "Invalid delegate take: must be a finite number (got {}).",
+            take
+        );
+    }
+    Ok(())
+}
+
 /// Check per-subnet spending limit from config.
 /// Returns Ok if no limit set or amount is within limit, Err otherwise.
 pub fn check_spending_limit(netuid: u16, tao_amount: f64) -> Result<()> {

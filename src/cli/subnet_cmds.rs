@@ -751,6 +751,7 @@ pub(super) async fn handle_subnet(
             value,
         } => handle_subnet_set_param(client, netuid, &param, value.as_deref(), ctx).await,
         SubnetCommands::SetSymbol { netuid, symbol } => {
+            crate::cli::helpers::validate_symbol(&symbol)?;
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
             unlock_coldkey(&mut wallet, password)?;
             println!("Setting symbol for SN{} to \"{}\"", netuid, symbol);
@@ -919,9 +920,7 @@ pub(super) async fn handle_subnet(
                         e
                     )
                 })?;
-            if split.is_empty() {
-                anyhow::bail!("At least one emission weight is required.");
-            }
+            crate::cli::helpers::validate_emission_weights(&split)?;
             let total: u64 = split.iter().map(|v| *v as u64).sum();
             println!(
                 "Setting SN{} emission split: {:?} (total: {})",
@@ -967,6 +966,9 @@ pub(super) async fn handle_subnet(
             fast,
             watch,
         } => {
+            if let Some(cost) = max_cost {
+                crate::cli::helpers::validate_max_cost(cost)?;
+            }
             let max_burn = max_cost.map(Balance::from_tao);
             if watch {
                 // Watch-only mode: no wallet needed
