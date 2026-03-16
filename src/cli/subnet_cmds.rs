@@ -1271,16 +1271,35 @@ async fn handle_snipe(
             Err(e) => {
                 let msg = format!("{}", e);
                 // Classify the error
-                if msg.contains("AlreadyRegistered") || msg.contains("HotKeyAlreadyRegistered") {
+                if msg.contains("AlreadyRegistered")
+                    || msg.contains("HotKeyAlreadyRegistered")
+                    || msg.contains("HotKeyAlreadyRegisteredInSubNet")
+                {
                     println!();
                     println!(
                         "\n  ✓ Hotkey {} is already registered on SN{}.",
                         short_hk, netuid
                     );
                     return Ok(());
-                } else if msg.contains("InvalidNetuid") || msg.contains("NetworkDoesNotExist") {
+                } else if msg.contains("InvalidNetuid")
+                    || msg.contains("NetworkDoesNotExist")
+                    || msg.contains("SubnetNotExists")
+                {
                     println!();
                     anyhow::bail!("SN{} does not exist. Aborting.", netuid);
+                } else if msg.contains("NotRegistered")
+                    || msg.contains("HotKeyNotRegisteredInNetwork")
+                {
+                    println!();
+                    anyhow::bail!(
+                        "Hotkey {} is not registered in any subnet. Register on at least one subnet first, \
+                         then retry. Error: {}", short_hk, crate::utils::truncate(&msg, 120)
+                    );
+                } else if msg.contains("NonAssociatedColdKey") {
+                    println!();
+                    anyhow::bail!(
+                        "Coldkey is not associated with hotkey {}. Check --wallet and --hotkey flags.", short_hk
+                    );
                 } else if msg.contains("TooManyRegistrationsThisBlock") {
                     // Wait for next block — the subscription will deliver it
                     print!(" rate-limited, next block...");

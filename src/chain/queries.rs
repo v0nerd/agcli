@@ -383,6 +383,104 @@ impl Client {
         }
     }
 
+    // ──────── Multisig Pending ────────
+
+    /// Query pending multisig operations for a multisig account.
+    /// Returns a list of (call_hash_hex, timepoint_height, timepoint_index, approvals_count, deposit).
+    pub async fn list_multisig_pending(
+        &self,
+        multisig_ss58: &str,
+    ) -> Result<Vec<(String, u32, u32, u32, u128)>> {
+        let account_id = Self::ss58_to_account_id(multisig_ss58)?;
+        let inner = &self.inner;
+        let result = retry_on_transient("list_multisig_pending", RPC_RETRIES, || async {
+            let addr = subxt::dynamic::storage(
+                "Multisig",
+                "Multisigs",
+                vec![subxt::dynamic::Value::from_bytes(account_id.0)],
+            );
+            let mut results = Vec::new();
+            let mut iter = inner
+                .storage()
+                .at_latest()
+                .await?
+                .iter(addr)
+                .await
+                .context("Failed to iterate multisig storage")?;
+            while let Some(Ok(pair)) = iter.next().await {
+                // Serialize the decoded value to JSON for easier field access
+                let value = pair.value.to_value()?;
+                let json_str = serde_json::to_string(&value).unwrap_or_default();
+                let json: serde_json::Value =
+                    serde_json::from_str(&json_str).unwrap_or(serde_json::Value::Null);
+                let height = json
+                    .get("when")
+                    .and_then(|w| w.get("height"))
+                    .and_then(|h| h.as_u64())
+                    .unwrap_or(0) as u32;
+                let index = json
+                    .get("when")
+                    .and_then(|w| w.get("index"))
+                    .and_then(|i| i.as_u64())
+                    .unwrap_or(0) as u32;
+                let deposit = json.get("deposit").and_then(|d| d.as_u64()).unwrap_or(0) as u128;
+                let approvals = json
+                    .get("approvals")
+                    .and_then(|a| a.as_array())
+                    .map(|a| a.len() as u32)
+                    .unwrap_or(0);
+                // Extract call hash from the storage key (last 32 bytes)
+                let key_bytes = pair.key_bytes;
+                let call_hash_hex = if key_bytes.len() >= 32 {
+                    format!("0x{}", hex::encode(&key_bytes[key_bytes.len() - 32..]))
+                } else {
+                    "unknown".to_string()
+                };
+                results.push((call_hash_hex, height, index, approvals, deposit));
+            }
+            Ok(results)
+        })
+        .await?;
+        Ok(result)
+    }
+
+    // ──────── Proxy Announcements ────────
+
+    /// List pending proxy announcements for an account.
+    /// Returns a list of (delegate_ss58, real_ss58, call_hash_hex, height).
+    pub async fn list_proxy_announcements(&self, ss58: &str) -> Result<Vec<(String, String, u32)>> {
+        let account_id = Self::ss58_to_account_id(ss58)?;
+        let inner = &self.inner;
+        let result = retry_on_transient("list_proxy_announcements", RPC_RETRIES, || async {
+            let addr = api::storage().proxy().announcements(&account_id);
+            let r = inner
+                .storage()
+                .at_latest()
+                .await?
+                .fetch(&addr)
+                .await
+                .context("Failed to fetch proxy announcements")?;
+            Ok(r)
+        })
+        .await?;
+        match result {
+            Some((announcements, _deposit)) => Ok(announcements
+                .0
+                .into_iter()
+                .map(|a| {
+                    let real_ss58 = sp_core::crypto::AccountId32::from(a.real.0).to_string();
+                    let height = a.height;
+                    (
+                        real_ss58,
+                        format!("0x{}", hex::encode(a.call_hash.0)),
+                        height,
+                    )
+                })
+                .collect()),
+            None => Ok(vec![]),
+        }
+    }
+
     // ──────── Coldkey Swap Detection ────────
 
     /// Check if a coldkey has a scheduled swap. Returns (execution_block, new_coldkey_ss58) if scheduled.

@@ -398,6 +398,21 @@ pub fn require_password(
         })
 }
 
+/// Parse an optional JSON string into a vec of subxt dynamic Values.
+pub fn parse_json_args(args: &Option<String>) -> anyhow::Result<Vec<subxt::dynamic::Value>> {
+    if let Some(ref args_json) = args {
+        let parsed: Vec<serde_json::Value> = serde_json::from_str(args_json).map_err(|e| {
+            anyhow::anyhow!(
+                "Invalid JSON args '{}'. Expected a JSON array, e.g. '[1, \"0x...\"]'",
+                e
+            )
+        })?;
+        Ok(parsed.iter().map(json_to_subxt_value).collect())
+    } else {
+        Ok(vec![])
+    }
+}
+
 /// Convert a serde_json::Value to a subxt dynamic Value for multisig call args.
 pub fn json_to_subxt_value(v: &serde_json::Value) -> subxt::dynamic::Value {
     use subxt::dynamic::Value;

@@ -1444,6 +1444,317 @@ impl Client {
         );
         self.sign_submit(&tx, pair).await
     }
+
+    /// Execute a multisig call (Multisig::as_multi) — the final signatory calls this
+    /// to actually execute the underlying call once threshold is met.
+    pub async fn execute_multisig(
+        &self,
+        pair: &sr25519::Pair,
+        other_signatories: &[AccountId],
+        threshold: u16,
+        timepoint: Option<(u32, u32)>,
+        pallet: &str,
+        call: &str,
+        fields: Vec<subxt::dynamic::Value>,
+    ) -> Result<String> {
+        use subxt::dynamic::Value;
+        let inner_call = subxt::dynamic::tx(pallet, call, fields);
+        let encoded = self.inner.tx().call_data(&inner_call)?;
+        let others: Vec<Value> = other_signatories
+            .iter()
+            .map(|id| Value::from_bytes(id.0))
+            .collect();
+        let maybe_timepoint = match timepoint {
+            Some((height, index)) => Value::unnamed_variant(
+                "Some",
+                [Value::named_composite([
+                    ("height", Value::u128(height as u128)),
+                    ("index", Value::u128(index as u128)),
+                ])],
+            ),
+            None => Value::unnamed_variant("None", []),
+        };
+        let tx = subxt::dynamic::tx(
+            "Multisig",
+            "as_multi",
+            vec![
+                Value::u128(threshold as u128),
+                Value::unnamed_composite(others),
+                maybe_timepoint,
+                Value::from_bytes(encoded),
+                Value::named_composite([
+                    ("ref_time", Value::u128(0)),
+                    ("proof_size", Value::u128(0)),
+                ]),
+            ],
+        );
+        self.sign_submit(&tx, pair).await
+    }
+
+    /// Cancel a pending multisig operation (Multisig::cancel_as_multi).
+    pub async fn cancel_multisig(
+        &self,
+        pair: &sr25519::Pair,
+        other_signatories: &[AccountId],
+        threshold: u16,
+        timepoint: (u32, u32),
+        call_hash: [u8; 32],
+    ) -> Result<String> {
+        use subxt::dynamic::Value;
+        let others: Vec<Value> = other_signatories
+            .iter()
+            .map(|id| Value::from_bytes(id.0))
+            .collect();
+        let tp = Value::named_composite([
+            ("height", Value::u128(timepoint.0 as u128)),
+            ("index", Value::u128(timepoint.1 as u128)),
+        ]);
+        let tx = subxt::dynamic::tx(
+            "Multisig",
+            "cancel_as_multi",
+            vec![
+                Value::u128(threshold as u128),
+                Value::unnamed_composite(others),
+                tp,
+                Value::from_bytes(call_hash),
+            ],
+        );
+        self.sign_submit(&tx, pair).await
+    }
+
+    // ──────── Scheduler ────────
+
+    /// Schedule a call for a future block (Scheduler::schedule).
+    pub async fn schedule_call(
+        &self,
+        pair: &sr25519::Pair,
+        when: u32,
+        maybe_periodic: Option<(u32, u32)>,
+        priority: u8,
+        pallet: &str,
+        call: &str,
+        fields: Vec<subxt::dynamic::Value>,
+    ) -> Result<String> {
+        use subxt::dynamic::Value;
+        let inner_call = subxt::dynamic::tx(pallet, call, fields);
+        let encoded = self.inner.tx().call_data(&inner_call)?;
+        let periodic = match maybe_periodic {
+            Some((period, count)) => Value::unnamed_variant(
+                "Some",
+                [Value::unnamed_composite([
+                    Value::u128(period as u128),
+                    Value::u128(count as u128),
+                ])],
+            ),
+            None => Value::unnamed_variant("None", []),
+        };
+        let tx = subxt::dynamic::tx(
+            "Scheduler",
+            "schedule",
+            vec![
+                Value::u128(when as u128),
+                periodic,
+                Value::u128(priority as u128),
+                Value::from_bytes(encoded),
+            ],
+        );
+        self.sign_submit(&tx, pair).await
+    }
+
+    /// Schedule a named call (Scheduler::schedule_named).
+    pub async fn schedule_named_call(
+        &self,
+        pair: &sr25519::Pair,
+        id: &[u8],
+        when: u32,
+        maybe_periodic: Option<(u32, u32)>,
+        priority: u8,
+        pallet: &str,
+        call: &str,
+        fields: Vec<subxt::dynamic::Value>,
+    ) -> Result<String> {
+        use subxt::dynamic::Value;
+        let inner_call = subxt::dynamic::tx(pallet, call, fields);
+        let encoded = self.inner.tx().call_data(&inner_call)?;
+        let periodic = match maybe_periodic {
+            Some((period, count)) => Value::unnamed_variant(
+                "Some",
+                [Value::unnamed_composite([
+                    Value::u128(period as u128),
+                    Value::u128(count as u128),
+                ])],
+            ),
+            None => Value::unnamed_variant("None", []),
+        };
+        let tx = subxt::dynamic::tx(
+            "Scheduler",
+            "schedule_named",
+            vec![
+                Value::from_bytes(id),
+                Value::u128(when as u128),
+                periodic,
+                Value::u128(priority as u128),
+                Value::from_bytes(encoded),
+            ],
+        );
+        self.sign_submit(&tx, pair).await
+    }
+
+    /// Cancel an anonymously scheduled task (Scheduler::cancel).
+    pub async fn cancel_scheduled(
+        &self,
+        pair: &sr25519::Pair,
+        when: u32,
+        index: u32,
+    ) -> Result<String> {
+        use subxt::dynamic::Value;
+        let tx = subxt::dynamic::tx(
+            "Scheduler",
+            "cancel",
+            vec![Value::u128(when as u128), Value::u128(index as u128)],
+        );
+        self.sign_submit(&tx, pair).await
+    }
+
+    /// Cancel a named scheduled task (Scheduler::cancel_named).
+    pub async fn cancel_named_scheduled(&self, pair: &sr25519::Pair, id: &[u8]) -> Result<String> {
+        use subxt::dynamic::Value;
+        let tx = subxt::dynamic::tx("Scheduler", "cancel_named", vec![Value::from_bytes(id)]);
+        self.sign_submit(&tx, pair).await
+    }
+
+    // ──────── Preimage ────────
+
+    /// Store a preimage on-chain (Preimage::note_preimage).
+    pub async fn note_preimage(
+        &self,
+        pair: &sr25519::Pair,
+        pallet: &str,
+        call: &str,
+        fields: Vec<subxt::dynamic::Value>,
+    ) -> Result<(String, [u8; 32])> {
+        use subxt::dynamic::Value;
+        let inner_call = subxt::dynamic::tx(pallet, call, fields);
+        let encoded = self.inner.tx().call_data(&inner_call)?;
+        let preimage_hash = sp_core::hashing::blake2_256(&encoded);
+        let tx = subxt::dynamic::tx(
+            "Preimage",
+            "note_preimage",
+            vec![Value::from_bytes(encoded)],
+        );
+        let tx_hash = self.sign_submit(&tx, pair).await?;
+        Ok((tx_hash, preimage_hash))
+    }
+
+    /// Remove a preimage (Preimage::unnote_preimage).
+    pub async fn unnote_preimage(
+        &self,
+        pair: &sr25519::Pair,
+        preimage_hash: [u8; 32],
+    ) -> Result<String> {
+        use subxt::dynamic::Value;
+        let tx = subxt::dynamic::tx(
+            "Preimage",
+            "unnote_preimage",
+            vec![Value::from_bytes(preimage_hash)],
+        );
+        self.sign_submit(&tx, pair).await
+    }
+
+    // ──────── Proxy Announcements ────────
+
+    /// Announce a proxy call for time-delayed execution (Proxy::announce).
+    pub async fn proxy_announce(
+        &self,
+        pair: &sr25519::Pair,
+        real_ss58: &str,
+        call_hash: [u8; 32],
+    ) -> Result<String> {
+        use subxt::dynamic::Value;
+        let real_id = Self::ss58_to_account_id(real_ss58)?;
+        let tx = subxt::dynamic::tx(
+            "Proxy",
+            "announce",
+            vec![Value::from_bytes(real_id.0), Value::from_bytes(call_hash)],
+        );
+        self.sign_submit(&tx, pair).await
+    }
+
+    /// Execute a previously announced proxy call (Proxy::proxy_announced).
+    pub async fn proxy_announced(
+        &self,
+        pair: &sr25519::Pair,
+        delegate_ss58: &str,
+        real_ss58: &str,
+        force_proxy_type: Option<&str>,
+        pallet: &str,
+        call: &str,
+        fields: Vec<subxt::dynamic::Value>,
+    ) -> Result<String> {
+        use subxt::dynamic::Value;
+        let delegate_id = Self::ss58_to_account_id(delegate_ss58)?;
+        let real_id = Self::ss58_to_account_id(real_ss58)?;
+        let inner_call = subxt::dynamic::tx(pallet, call, fields);
+        let encoded = self.inner.tx().call_data(&inner_call)?;
+        let proxy_type = match force_proxy_type {
+            Some(pt) => {
+                Value::unnamed_variant("Some", [Value::unnamed_variant(parse_proxy_type(pt), [])])
+            }
+            None => Value::unnamed_variant("None", []),
+        };
+        let tx = subxt::dynamic::tx(
+            "Proxy",
+            "proxy_announced",
+            vec![
+                Value::from_bytes(delegate_id.0),
+                Value::from_bytes(real_id.0),
+                proxy_type,
+                Value::from_bytes(encoded),
+            ],
+        );
+        self.sign_submit(&tx, pair).await
+    }
+
+    /// Reject an announced proxy call (Proxy::reject_announcement).
+    pub async fn proxy_reject_announcement(
+        &self,
+        pair: &sr25519::Pair,
+        delegate_ss58: &str,
+        call_hash: [u8; 32],
+    ) -> Result<String> {
+        use subxt::dynamic::Value;
+        let delegate_id = Self::ss58_to_account_id(delegate_ss58)?;
+        let tx = subxt::dynamic::tx(
+            "Proxy",
+            "reject_announcement",
+            vec![
+                Value::from_bytes(delegate_id.0),
+                Value::from_bytes(call_hash),
+            ],
+        );
+        self.sign_submit(&tx, pair).await
+    }
+
+    // ──────── Utility ────────
+
+    /// Submit a force_batch call — like batch but continues on individual call failure.
+    pub async fn force_batch(
+        &self,
+        pair: &sr25519::Pair,
+        encoded_calls: Vec<Vec<u8>>,
+    ) -> Result<String> {
+        use subxt::dynamic::Value;
+        let call_values: Vec<Value> = encoded_calls
+            .iter()
+            .map(|c| Value::from_bytes(c.clone()))
+            .collect();
+        let tx = subxt::dynamic::tx(
+            "Utility",
+            "force_batch",
+            vec![Value::unnamed_composite(call_values)],
+        );
+        self.sign_submit(&tx, pair).await
+    }
 }
 
 /// Parse a proxy type string to the on-chain variant name.

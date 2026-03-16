@@ -44,7 +44,13 @@ impl OutputFormat {
 #[command(name = "agcli", version, about, long_about = None)]
 pub struct Cli {
     /// Network to connect to
-    #[arg(long, short, global = true, default_value = "finney", env = "AGCLI_NETWORK")]
+    #[arg(
+        long,
+        short,
+        global = true,
+        default_value = "finney",
+        env = "AGCLI_NETWORK"
+    )]
     pub network: String,
 
     /// Custom chain endpoint (overrides --network)
@@ -52,11 +58,22 @@ pub struct Cli {
     pub endpoint: Option<String>,
 
     /// Wallet directory
-    #[arg(long, global = true, default_value = "~/.bittensor/wallets", env = "AGCLI_WALLET_DIR")]
+    #[arg(
+        long,
+        global = true,
+        default_value = "~/.bittensor/wallets",
+        env = "AGCLI_WALLET_DIR"
+    )]
     pub wallet_dir: String,
 
     /// Wallet name
-    #[arg(long, short, global = true, default_value = "default", env = "AGCLI_WALLET")]
+    #[arg(
+        long,
+        short,
+        global = true,
+        default_value = "default",
+        env = "AGCLI_WALLET"
+    )]
     pub wallet: String,
 
     /// Hotkey name
@@ -303,6 +320,16 @@ pub enum Commands {
     #[command(subcommand)]
     Utils(UtilsCommands),
 
+    // ──── Scheduler ────
+    /// Schedule calls for future execution
+    #[command(subcommand)]
+    Scheduler(SchedulerCommands),
+
+    // ──── Preimage ────
+    /// Manage call preimages (store/remove call data for governance/scheduler)
+    #[command(subcommand)]
+    Preimage(PreimageCommands),
+
     // ──── Batch ────
     /// Submit multiple extrinsics from a JSON file via Utility.batch_all
     Batch {
@@ -313,6 +340,9 @@ pub enum Commands {
         /// Use batch (fail-safe, continues on error) instead of batch_all (atomic)
         #[arg(long)]
         no_atomic: bool,
+        /// Use force_batch (continues on failure, no revert) instead of batch_all
+        #[arg(long)]
+        force: bool,
     },
 
     // ──── Localnet ────
@@ -1411,6 +1441,51 @@ pub enum ProxyCommands {
         #[arg(long)]
         address: Option<String>,
     },
+    /// Announce a proxy call for time-delayed execution
+    Announce {
+        /// The real account SS58 address (the account being proxied)
+        #[arg(long)]
+        real: String,
+        /// Call hash (0x-prefixed hex, blake2_256 of the encoded call)
+        #[arg(long)]
+        call_hash: String,
+    },
+    /// Execute a previously announced proxy call
+    ProxyAnnounced {
+        /// Delegate SS58 address (who made the announcement)
+        #[arg(long)]
+        delegate: String,
+        /// Real account SS58 address
+        #[arg(long)]
+        real: String,
+        /// Force proxy type (optional)
+        #[arg(long)]
+        proxy_type: Option<String>,
+        /// Pallet name for the call to execute
+        #[arg(long)]
+        pallet: String,
+        /// Call name
+        #[arg(long)]
+        call: String,
+        /// Call args as JSON array
+        #[arg(long)]
+        args: Option<String>,
+    },
+    /// Reject an announced proxy call
+    RejectAnnouncement {
+        /// Delegate SS58 address (who made the announcement)
+        #[arg(long)]
+        delegate: String,
+        /// Call hash (0x-prefixed hex)
+        #[arg(long)]
+        call_hash: String,
+    },
+    /// List pending proxy announcements for an account
+    ListAnnouncements {
+        /// SS58 address (defaults to wallet coldkey)
+        #[arg(long)]
+        address: Option<String>,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -1469,6 +1544,146 @@ pub enum MultisigCommands {
         /// Call hash (0x-prefixed hex)
         #[arg(long)]
         call_hash: String,
+    },
+    /// Execute a multisig call (as_multi) — final signatory uses this to execute the call
+    Execute {
+        /// Other signatories (comma-separated SS58, excluding yourself)
+        #[arg(long)]
+        others: String,
+        /// Approval threshold
+        #[arg(long)]
+        threshold: u16,
+        /// Pallet name for the inner call
+        #[arg(long)]
+        pallet: String,
+        /// Call name
+        #[arg(long)]
+        call: String,
+        /// Call args as JSON array
+        #[arg(long)]
+        args: Option<String>,
+        /// Timepoint block height (from pending multisig query)
+        #[arg(long)]
+        timepoint_height: Option<u32>,
+        /// Timepoint extrinsic index (from pending multisig query)
+        #[arg(long)]
+        timepoint_index: Option<u32>,
+    },
+    /// Cancel a pending multisig operation (cancel_as_multi)
+    Cancel {
+        /// Other signatories (comma-separated SS58, excluding yourself)
+        #[arg(long)]
+        others: String,
+        /// Approval threshold
+        #[arg(long)]
+        threshold: u16,
+        /// Call hash (0x-prefixed hex)
+        #[arg(long)]
+        call_hash: String,
+        /// Timepoint block height
+        #[arg(long)]
+        timepoint_height: u32,
+        /// Timepoint extrinsic index
+        #[arg(long)]
+        timepoint_index: u32,
+    },
+    /// List pending multisig operations for a multisig account
+    List {
+        /// Multisig account SS58 address
+        #[arg(long)]
+        address: String,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum SchedulerCommands {
+    /// Schedule a call for execution at a future block
+    Schedule {
+        /// Block number when the call should execute
+        #[arg(long)]
+        when: u32,
+        /// Pallet name for the scheduled call
+        #[arg(long)]
+        pallet: String,
+        /// Call name
+        #[arg(long)]
+        call: String,
+        /// Call args as JSON array
+        #[arg(long)]
+        args: Option<String>,
+        /// Execution priority (0=highest, 255=lowest, default 128)
+        #[arg(long, default_value = "128")]
+        priority: u8,
+        /// Repeat every N blocks (requires --repeat-count)
+        #[arg(long)]
+        repeat_every: Option<u32>,
+        /// Number of times to repeat (requires --repeat-every)
+        #[arg(long)]
+        repeat_count: Option<u32>,
+    },
+    /// Schedule a named call (can be cancelled by name)
+    ScheduleNamed {
+        /// Unique task ID (string, will be hashed)
+        #[arg(long)]
+        id: String,
+        /// Block number when the call should execute
+        #[arg(long)]
+        when: u32,
+        /// Pallet name
+        #[arg(long)]
+        pallet: String,
+        /// Call name
+        #[arg(long)]
+        call: String,
+        /// Call args as JSON array
+        #[arg(long)]
+        args: Option<String>,
+        /// Execution priority (0=highest, 255=lowest, default 128)
+        #[arg(long, default_value = "128")]
+        priority: u8,
+        /// Repeat every N blocks
+        #[arg(long)]
+        repeat_every: Option<u32>,
+        /// Number of times to repeat
+        #[arg(long)]
+        repeat_count: Option<u32>,
+    },
+    /// Cancel a scheduled task by block and index
+    Cancel {
+        /// Block number the task is scheduled for
+        #[arg(long)]
+        when: u32,
+        /// Task index within that block
+        #[arg(long)]
+        index: u32,
+    },
+    /// Cancel a named scheduled task
+    CancelNamed {
+        /// Task ID that was used when scheduling
+        #[arg(long)]
+        id: String,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum PreimageCommands {
+    /// Store a call preimage on-chain (returns the preimage hash)
+    Note {
+        /// Pallet name for the call to store
+        #[arg(long)]
+        pallet: String,
+        /// Call name
+        #[arg(long)]
+        call: String,
+        /// Call args as JSON array
+        #[arg(long)]
+        args: Option<String>,
+    },
+    /// Remove a preimage from storage
+    Unnote {
+        /// Preimage hash (0x-prefixed hex)
+        #[arg(long)]
+        hash: String,
     },
 }
 

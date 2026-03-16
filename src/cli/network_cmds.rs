@@ -429,6 +429,256 @@ pub(super) async fn handle_multisig(
             println!("Multisig approval submitted. Tx: {}", tx_hash);
             Ok(())
         }
+        MultisigCommands::Execute {
+            others,
+            threshold,
+            pallet,
+            call,
+            args,
+            timepoint_height,
+            timepoint_index,
+        } => {
+            let mut client = Client::connect_network(network).await?;
+            client.set_dry_run(dry_run);
+            let mut wallet = open_wallet(wallet_dir, wallet_name)?;
+            unlock_coldkey(&mut wallet, password)?;
+            let other_ids = parse_sorted_signatories(&others)?;
+            let fields = parse_json_args(&args)?;
+            let timepoint = match (timepoint_height, timepoint_index) {
+                (Some(h), Some(i)) => Some((h, i)),
+                (None, None) => None,
+                _ => anyhow::bail!(
+                    "Both --timepoint-height and --timepoint-index must be provided together"
+                ),
+            };
+            println!(
+                "Executing multisig call: {}.{} (threshold {}/{})",
+                pallet,
+                call,
+                threshold,
+                other_ids.len() + 1
+            );
+            let tx_hash = client
+                .execute_multisig(
+                    wallet.coldkey()?,
+                    &other_ids,
+                    threshold,
+                    timepoint,
+                    &pallet,
+                    &call,
+                    fields,
+                )
+                .await?;
+            println!("Multisig call executed. Tx: {}", tx_hash);
+            Ok(())
+        }
+        MultisigCommands::Cancel {
+            others,
+            threshold,
+            call_hash,
+            timepoint_height,
+            timepoint_index,
+        } => {
+            let mut client = Client::connect_network(network).await?;
+            client.set_dry_run(dry_run);
+            let mut wallet = open_wallet(wallet_dir, wallet_name)?;
+            unlock_coldkey(&mut wallet, password)?;
+            let other_ids = parse_sorted_signatories(&others)?;
+            let hash_hex = call_hash.strip_prefix("0x").unwrap_or(&call_hash);
+            let hash_bytes: [u8; 32] = hex::decode(hash_hex)?.try_into().map_err(|_| {
+                anyhow::anyhow!("Call hash must be exactly 32 bytes (64 hex chars)")
+            })?;
+            println!(
+                "Cancelling multisig call (threshold {}/{})",
+                threshold,
+                other_ids.len() + 1
+            );
+            let tx_hash = client
+                .cancel_multisig(
+                    wallet.coldkey()?,
+                    &other_ids,
+                    threshold,
+                    (timepoint_height, timepoint_index),
+                    hash_bytes,
+                )
+                .await?;
+            println!("Multisig cancellation submitted. Tx: {}", tx_hash);
+            Ok(())
+        }
+        MultisigCommands::List { address } => {
+            let client = Client::connect_network(network).await?;
+            let pending = client.list_multisig_pending(&address).await?;
+            if pending.is_empty() {
+                println!("No pending multisig operations for {}", address);
+            } else {
+                println!(
+                    "Pending multisig operations for {} ({} found):",
+                    address,
+                    pending.len()
+                );
+                for (call_hash, height, index, approvals, deposit) in &pending {
+                    println!("  Call hash:  {}", call_hash);
+                    println!("  Timepoint: height={}, index={}", height, index);
+                    println!("  Approvals: {}", approvals);
+                    println!("  Deposit:   {} RAO", deposit);
+                    println!();
+                }
+            }
+            Ok(())
+        }
+    }
+}
+
+// ──────── Scheduler ────────
+
+pub(super) async fn handle_scheduler(
+    cmd: SchedulerCommands,
+    client: &Client,
+    ctx: &Ctx<'_>,
+) -> Result<()> {
+    match cmd {
+        SchedulerCommands::Schedule {
+            when,
+            pallet,
+            call,
+            args,
+            priority,
+            repeat_every,
+            repeat_count,
+        } => {
+            let mut wallet = open_wallet(ctx.wallet_dir, ctx.wallet_name)?;
+            unlock_coldkey(&mut wallet, ctx.password)?;
+            let fields = parse_json_args(&args)?;
+            let periodic = match (repeat_every, repeat_count) {
+                (Some(period), Some(count)) => Some((period, count)),
+                (None, None) => None,
+                _ => anyhow::bail!(
+                    "Both --repeat-every and --repeat-count must be provided together"
+                ),
+            };
+            println!(
+                "Scheduling {}.{} at block {} (priority {}{})",
+                pallet,
+                call,
+                when,
+                priority,
+                periodic
+                    .map(|(p, c)| format!(", repeat every {} blocks {} times", p, c))
+                    .unwrap_or_default()
+            );
+            let tx_hash = client
+                .schedule_call(
+                    wallet.coldkey()?,
+                    when,
+                    periodic,
+                    priority,
+                    &pallet,
+                    &call,
+                    fields,
+                )
+                .await?;
+            println!("Call scheduled. Tx: {}", tx_hash);
+            Ok(())
+        }
+        SchedulerCommands::ScheduleNamed {
+            id,
+            when,
+            pallet,
+            call,
+            args,
+            priority,
+            repeat_every,
+            repeat_count,
+        } => {
+            let mut wallet = open_wallet(ctx.wallet_dir, ctx.wallet_name)?;
+            unlock_coldkey(&mut wallet, ctx.password)?;
+            let fields = parse_json_args(&args)?;
+            let periodic = match (repeat_every, repeat_count) {
+                (Some(period), Some(count)) => Some((period, count)),
+                (None, None) => None,
+                _ => anyhow::bail!(
+                    "Both --repeat-every and --repeat-count must be provided together"
+                ),
+            };
+            println!(
+                "Scheduling named task '{}': {}.{} at block {} (priority {})",
+                id, pallet, call, when, priority
+            );
+            let tx_hash = client
+                .schedule_named_call(
+                    wallet.coldkey()?,
+                    id.as_bytes(),
+                    when,
+                    periodic,
+                    priority,
+                    &pallet,
+                    &call,
+                    fields,
+                )
+                .await?;
+            println!("Named call scheduled. Tx: {}", tx_hash);
+            Ok(())
+        }
+        SchedulerCommands::Cancel { when, index } => {
+            let mut wallet = open_wallet(ctx.wallet_dir, ctx.wallet_name)?;
+            unlock_coldkey(&mut wallet, ctx.password)?;
+            println!(
+                "Cancelling scheduled task at block {}, index {}",
+                when, index
+            );
+            let tx_hash = client
+                .cancel_scheduled(wallet.coldkey()?, when, index)
+                .await?;
+            println!("Scheduled task cancelled. Tx: {}", tx_hash);
+            Ok(())
+        }
+        SchedulerCommands::CancelNamed { id } => {
+            let mut wallet = open_wallet(ctx.wallet_dir, ctx.wallet_name)?;
+            unlock_coldkey(&mut wallet, ctx.password)?;
+            println!("Cancelling named scheduled task '{}'", id);
+            let tx_hash = client
+                .cancel_named_scheduled(wallet.coldkey()?, id.as_bytes())
+                .await?;
+            println!("Named scheduled task cancelled. Tx: {}", tx_hash);
+            Ok(())
+        }
+    }
+}
+
+// ──────── Preimage ────────
+
+pub(super) async fn handle_preimage(
+    cmd: PreimageCommands,
+    client: &Client,
+    ctx: &Ctx<'_>,
+) -> Result<()> {
+    match cmd {
+        PreimageCommands::Note { pallet, call, args } => {
+            let mut wallet = open_wallet(ctx.wallet_dir, ctx.wallet_name)?;
+            unlock_coldkey(&mut wallet, ctx.password)?;
+            let fields = parse_json_args(&args)?;
+            println!("Storing preimage for {}.{}", pallet, call);
+            let (tx_hash, preimage_hash) = client
+                .note_preimage(wallet.coldkey()?, &pallet, &call, fields)
+                .await?;
+            println!("Preimage stored. Tx: {}", tx_hash);
+            println!("Preimage hash: 0x{}", hex::encode(preimage_hash));
+            Ok(())
+        }
+        PreimageCommands::Unnote { hash } => {
+            let mut wallet = open_wallet(ctx.wallet_dir, ctx.wallet_name)?;
+            unlock_coldkey(&mut wallet, ctx.password)?;
+            let hash_hex = hash.strip_prefix("0x").unwrap_or(&hash);
+            let hash_bytes: [u8; 32] = hex::decode(hash_hex)?.try_into().map_err(|_| {
+                anyhow::anyhow!("Preimage hash must be exactly 32 bytes (64 hex chars)")
+            })?;
+            println!("Removing preimage 0x{}", hash_hex);
+            let tx_hash = client
+                .unnote_preimage(wallet.coldkey()?, hash_bytes)
+                .await?;
+            println!("Preimage removed. Tx: {}", tx_hash);
+            Ok(())
+        }
     }
 }
 
@@ -665,6 +915,104 @@ pub(super) async fn handle_proxy(cmd: ProxyCommands, client: &Client, ctx: &Ctx<
                         crate::utils::short_ss58(&addr)
                     )),
                 );
+            }
+            Ok(())
+        }
+        ProxyCommands::Announce { real, call_hash } => {
+            let mut wallet = open_wallet(wallet_dir, wallet_name)?;
+            unlock_coldkey(&mut wallet, password)?;
+            let hash_hex = call_hash.strip_prefix("0x").unwrap_or(&call_hash);
+            let hash_bytes: [u8; 32] = hex::decode(hash_hex)?.try_into().map_err(|_| {
+                anyhow::anyhow!("Call hash must be exactly 32 bytes (64 hex chars)")
+            })?;
+            println!(
+                "Announcing proxy call for {} (hash: {})",
+                crate::utils::short_ss58(&real),
+                call_hash
+            );
+            let tx_hash = client
+                .proxy_announce(wallet.coldkey()?, &real, hash_bytes)
+                .await?;
+            println!("Proxy announcement submitted. Tx: {}", tx_hash);
+            Ok(())
+        }
+        ProxyCommands::ProxyAnnounced {
+            delegate,
+            real,
+            proxy_type,
+            pallet,
+            call,
+            args,
+        } => {
+            let mut wallet = open_wallet(wallet_dir, wallet_name)?;
+            unlock_coldkey(&mut wallet, password)?;
+            let fields = parse_json_args(&args)?;
+            println!(
+                "Executing announced proxy call: {}.{} (delegate={}, real={})",
+                pallet,
+                call,
+                crate::utils::short_ss58(&delegate),
+                crate::utils::short_ss58(&real)
+            );
+            let tx_hash = client
+                .proxy_announced(
+                    wallet.coldkey()?,
+                    &delegate,
+                    &real,
+                    proxy_type.as_deref(),
+                    &pallet,
+                    &call,
+                    fields,
+                )
+                .await?;
+            println!("Announced proxy call executed. Tx: {}", tx_hash);
+            Ok(())
+        }
+        ProxyCommands::RejectAnnouncement {
+            delegate,
+            call_hash,
+        } => {
+            let mut wallet = open_wallet(wallet_dir, wallet_name)?;
+            unlock_coldkey(&mut wallet, password)?;
+            let hash_hex = call_hash.strip_prefix("0x").unwrap_or(&call_hash);
+            let hash_bytes: [u8; 32] = hex::decode(hash_hex)?.try_into().map_err(|_| {
+                anyhow::anyhow!("Call hash must be exactly 32 bytes (64 hex chars)")
+            })?;
+            println!(
+                "Rejecting announcement from {}",
+                crate::utils::short_ss58(&delegate)
+            );
+            let tx_hash = client
+                .proxy_reject_announcement(wallet.coldkey()?, &delegate, hash_bytes)
+                .await?;
+            println!("Announcement rejected. Tx: {}", tx_hash);
+            Ok(())
+        }
+        ProxyCommands::ListAnnouncements { address } => {
+            let addr = resolve_coldkey_address(address, wallet_dir, wallet_name);
+            let announcements = client.list_proxy_announcements(&addr).await?;
+            if output.is_json() {
+                let json: Vec<serde_json::Value> = announcements
+                    .iter()
+                    .map(|(real, call_hash, height)| {
+                        serde_json::json!({"real": real, "call_hash": call_hash, "height": height})
+                    })
+                    .collect();
+                print_json_ser(&json);
+            } else if announcements.is_empty() {
+                println!(
+                    "No pending announcements for {}",
+                    crate::utils::short_ss58(&addr)
+                );
+            } else {
+                println!(
+                    "Pending proxy announcements for {} ({} found):",
+                    crate::utils::short_ss58(&addr),
+                    announcements.len()
+                );
+                for (real, call_hash, height) in &announcements {
+                    println!("  Real: {}  Hash: {}  Height: {}", real, call_hash, height);
+                }
             }
             Ok(())
         }

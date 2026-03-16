@@ -78,6 +78,8 @@ pub async fn execute(cli: Cli) -> Result<()> {
         Commands::Block(_) => "block",
         Commands::Diff(_) => "diff",
         Commands::Batch { .. } => "batch",
+        Commands::Scheduler(_) => "scheduler",
+        Commands::Preimage(_) => "preimage",
         Commands::Localnet(_) => "localnet",
         Commands::Admin(_) => "admin",
     };
@@ -425,12 +427,31 @@ pub async fn execute(cli: Cli) -> Result<()> {
             let client = connect(&network, dry_run, best).await?;
             block_cmds::handle_diff(cmd, &client, ctx.output, ctx.wallet_dir, ctx.wallet_name).await
         }
-        Commands::Batch { file, no_atomic } => {
+        Commands::Batch {
+            file,
+            no_atomic,
+            force,
+        } => {
             let client = connect(&network, dry_run, best).await?;
             let mut wallet = open_wallet(ctx.wallet_dir, ctx.wallet_name)?;
             unlock_coldkey(&mut wallet, ctx.password)?;
-            system_cmds::handle_batch(&client, wallet.coldkey()?, &file, no_atomic, ctx.output)
-                .await
+            system_cmds::handle_batch(
+                &client,
+                wallet.coldkey()?,
+                &file,
+                no_atomic,
+                force,
+                ctx.output,
+            )
+            .await
+        }
+        Commands::Scheduler(cmd) => {
+            let client = connect(&network, dry_run, best).await?;
+            network_cmds::handle_scheduler(cmd, &client, &ctx).await
+        }
+        Commands::Preimage(cmd) => {
+            let client = connect(&network, dry_run, best).await?;
+            network_cmds::handle_preimage(cmd, &client, &ctx).await
         }
         Commands::Localnet(cmd) => localnet_cmds::handle_localnet(cmd, &ctx).await,
         Commands::Admin(cmd) => {

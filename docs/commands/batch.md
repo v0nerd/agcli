@@ -1,11 +1,11 @@
 # batch — Batch Extrinsic Submission
 
-Submit multiple extrinsics atomically (or non-atomically) from a JSON file. Uses Substrate's `Utility.batch_all` or `Utility.batch`.
+Submit multiple extrinsics from a JSON file. Supports atomic, non-atomic, and force modes.
 
 ## Usage
 
 ```bash
-agcli batch --file calls.json [--no-atomic] [--password PW] [--yes]
+agcli batch --file calls.json [--no-atomic] [--force] [--yes]
 ```
 
 ## JSON Format
@@ -20,15 +20,23 @@ agcli batch --file calls.json [--no-atomic] [--password PW] [--yes]
 - Hex strings in args (`"0xdead..."`) are auto-decoded as bytes
 - Uses `submit_raw_call` for each call — any pallet/call combo works
 
-## Atomic vs Non-Atomic
-- **atomic** (`batch_all`, default): All calls succeed or all revert. Safe for related operations.
-- **non-atomic** (`batch`, `--no-atomic`): Each call independent. Failed calls don't revert others.
+## Batch Modes
 
-## Source Code
-**agcli handler**: [`src/cli/system_cmds.rs`](https://github.com/unconst/agcli/blob/main/src/cli/system_cmds.rs) — `handle_batch()` at L354. Dispatched from [`src/cli/commands.rs`](https://github.com/unconst/agcli/blob/main/src/cli/commands.rs) at L384.
+| Flag | Utility Call | Behavior |
+|------|-------------|----------|
+| (default) | `batch_all` | **Atomic**: All calls succeed or all revert |
+| `--no-atomic` | `batch` | **Non-atomic**: Failed calls don't revert others, but may stop on first failure |
+| `--force` | `force_batch` | **Force**: Continues execution even if individual calls fail, never reverts |
 
-**Substrate pallet**: Uses standard `Utility` pallet (`Utility::batch_all`, `Utility::batch`).
+### When to use each:
+- **batch_all** (default): Related operations that must all succeed together
+- **batch** (`--no-atomic`): Independent operations where you want to know which failed
+- **force_batch** (`--force`): Best-effort execution, never reverts successful calls
+
+## On-chain Pallet
+- `Utility::batch_all` — Atomic batch
+- `Utility::batch` — Non-atomic batch
+- `Utility::force_batch` — Force batch (continues on failure)
 
 ## Related Commands
-- `agcli weights set` — Single weight set (simpler than batch)
-- `agcli stake add` — Single stake (simpler than batch)
+- `agcli scheduler schedule` — Schedule calls for future blocks

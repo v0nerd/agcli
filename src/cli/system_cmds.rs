@@ -581,6 +581,7 @@ pub(super) async fn handle_batch(
     pair: &sp_core::sr25519::Pair,
     file_path: &str,
     no_atomic: bool,
+    force: bool,
     output: OutputFormat,
 ) -> Result<()> {
     let content = std::fs::read_to_string(file_path)
@@ -592,15 +593,14 @@ pub(super) async fn handle_batch(
         anyhow::bail!("Batch file is empty (no calls to submit).");
     }
 
-    eprintln!(
-        "Batch: {} calls, mode={}",
-        calls.len(),
-        if no_atomic {
-            "batch (non-atomic)"
-        } else {
-            "batch_all (atomic)"
-        }
-    );
+    let mode_name = if force {
+        "force_batch (non-atomic, continues on failure)"
+    } else if no_atomic {
+        "batch (non-atomic)"
+    } else {
+        "batch_all (atomic)"
+    };
+    eprintln!("Batch: {} calls, mode={}", calls.len(), mode_name);
 
     let mut encoded_calls: Vec<Vec<u8>> = Vec::with_capacity(calls.len());
     for (i, call_json) in calls.iter().enumerate() {
@@ -639,8 +639,14 @@ pub(super) async fn handle_batch(
         encoded_calls.push(encoded);
     }
 
-    // Build Utility.batch_all or Utility.batch
-    let batch_call_name = if no_atomic { "batch" } else { "batch_all" };
+    // Build Utility.batch_all, Utility.batch, or Utility.force_batch
+    let batch_call_name = if force {
+        "force_batch"
+    } else if no_atomic {
+        "batch"
+    } else {
+        "batch_all"
+    };
     let call_values: Vec<subxt::dynamic::Value> = encoded_calls
         .iter()
         .map(|c| subxt::dynamic::Value::from_bytes(c.clone()))

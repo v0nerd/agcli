@@ -13,14 +13,12 @@ agcli multisig address --signatories "SS58_1,SS58_2,SS58_3" --threshold 2
 ```
 
 ### multisig submit
-Submit a new multisig call (first approval).
+Submit a new multisig call (first approval via approve_as_multi).
 
 ```bash
 agcli multisig submit --others "SS58_2,SS58_3" --threshold 2 \
   --pallet SubtensorModule --call add_stake --args '[...]'
 ```
-
-**On-chain**: `Multisig::as_multi(origin, threshold, other_signatories, maybe_timepoint, call, max_weight)`
 
 ### multisig approve
 Approve a pending multisig call by its hash.
@@ -29,12 +27,47 @@ Approve a pending multisig call by its hash.
 agcli multisig approve --others "SS58_2,SS58_3" --threshold 2 --call-hash 0x...
 ```
 
-**On-chain**: `Multisig::approve_as_multi(origin, threshold, other_signatories, maybe_timepoint, call_hash, max_weight)`
+### multisig execute
+Execute a multisig call (as_multi). The final signatory uses this to actually execute the underlying call once threshold is met.
 
-## Source Code
-**agcli handler**: [`src/cli/network_cmds.rs`](https://github.com/unconst/agcli/blob/main/src/cli/network_cmds.rs) — `handle_multisig()` at L314, subcommands: Address L323, Submit L356, Approve L400
+```bash
+agcli multisig execute --others "SS58_2,SS58_3" --threshold 2 \
+  --pallet SubtensorModule --call add_stake --args '[...]' \
+  --timepoint-height 12345 --timepoint-index 0
+```
 
-**Substrate pallet**: Uses standard `Multisig` pallet (`Multisig::as_multi`, `Multisig::approve_as_multi`).
+- `--timepoint-height` / `--timepoint-index`: From `multisig list` output. Optional for first call.
+
+### multisig cancel
+Cancel a pending multisig operation. Only the original submitter can cancel.
+
+```bash
+agcli multisig cancel --others "SS58_2,SS58_3" --threshold 2 \
+  --call-hash 0x... --timepoint-height 12345 --timepoint-index 0
+```
+
+### multisig list
+List pending multisig operations for a multisig account.
+
+```bash
+agcli multisig list --address 5MultisigSS58...
+```
+
+Output: call hash, timepoint (height/index), approval count, deposit.
+
+## Full Workflow
+
+1. **Derive address**: `multisig address` to get the multisig account SS58
+2. **Fund**: Transfer TAO to the multisig address
+3. **Submit**: First signer calls `multisig submit` (proposes + first approval)
+4. **Approve**: Other signers call `multisig approve` with the call hash
+5. **Execute**: Final signer calls `multisig execute` with the full call data and timepoint
+6. **Monitor**: Use `multisig list` to check pending operations
+
+## On-chain Pallets
+- `Multisig::approve_as_multi` — submit/approve
+- `Multisig::as_multi` — execute (final approval with call data)
+- `Multisig::cancel_as_multi` — cancel pending
 
 ## Related Commands
 - `agcli proxy add` — Simpler delegation (single signer)

@@ -771,13 +771,135 @@ fn format_submit_error(e: subxt::Error) -> anyhow::Error {
     }
 }
 
+/// Decode raw "Custom error: N" codes from SubtensorModule into named errors.
+/// When subxt can't match compile-time metadata to the runtime, it returns
+/// numeric error indices instead of named variants.
+fn decode_custom_error(msg: &str) -> Option<&'static str> {
+    // Extract the number from "Custom error: N" or "custom error: N"
+    let lower = msg.to_lowercase();
+    let idx = lower.find("custom error:")?;
+    let after = &msg[idx + "custom error:".len()..];
+    let num_str = after.trim().trim_matches(|c: char| !c.is_ascii_digit());
+    let n: u32 = num_str.parse().ok()?;
+    // SubtensorModule (pallet index 7) error enum — from chain metadata
+    match n {
+        0 => Some("RootNetworkDoesNotExist"),
+        1 => Some("InvalidIpType"),
+        2 => Some("InvalidIpAddress"),
+        3 => Some("InvalidPort"),
+        4 => Some("HotKeyNotRegisteredInSubNet"),
+        5 => Some("HotKeyAccountNotExists"),
+        6 => Some("HotKeyNotRegisteredInNetwork"),
+        7 => Some("NonAssociatedColdKey"),
+        8 => Some("NotEnoughStake"),
+        9 => Some("NotEnoughStakeToWithdraw"),
+        10 => Some("NotEnoughStakeToSetWeights"),
+        11 => Some("NotEnoughStakeToSetChildkeys"),
+        12 => Some("NotEnoughBalanceToStake"),
+        13 => Some("BalanceWithdrawalError"),
+        14 => Some("ZeroBalanceAfterWithdrawn"),
+        15 => Some("NeuronNoValidatorPermit"),
+        16 => Some("WeightVecNotEqualSize"),
+        17 => Some("DuplicateUids"),
+        18 => Some("UidVecContainInvalidOne"),
+        19 => Some("WeightVecLengthIsLow"),
+        20 => Some("TooManyRegistrationsThisBlock"),
+        21 => Some("HotKeyAlreadyRegisteredInSubNet"),
+        22 => Some("NewHotKeyIsSameWithOld"),
+        23 => Some("InvalidWorkBlock"),
+        24 => Some("InvalidDifficulty"),
+        25 => Some("InvalidSeal"),
+        26 => Some("MaxWeightExceeded"),
+        27 => Some("HotKeyAlreadyDelegate"),
+        28 => Some("SettingWeightsTooFast"),
+        29 => Some("IncorrectWeightVersionKey"),
+        30 => Some("ServingRateLimitExceeded"),
+        31 => Some("UidsLengthExceedUidsInSubNet"),
+        32 => Some("NetworkTxRateLimitExceeded"),
+        33 => Some("DelegateTxRateLimitExceeded"),
+        34 => Some("HotKeySetTxRateLimitExceeded"),
+        35 => Some("StakingRateLimitExceeded"),
+        36 => Some("SubNetRegistrationDisabled"),
+        37 => Some("TooManyRegistrationsThisInterval"),
+        38 => Some("TransactorAccountShouldBeHotKey"),
+        39 => Some("FaucetDisabled"),
+        40 => Some("NotSubnetOwner"),
+        41 => Some("RegistrationNotPermittedOnRootSubnet"),
+        42 => Some("StakeTooLowForRoot"),
+        43 => Some("AllNetworksInImmunity"),
+        44 => Some("NotEnoughBalanceToPaySwapHotKey"),
+        45 => Some("NotRootSubnet"),
+        46 => Some("CanNotSetRootNetworkWeights"),
+        47 => Some("NoNeuronIdAvailable"),
+        48 => Some("DelegateTakeTooLow"),
+        49 => Some("DelegateTakeTooHigh"),
+        50 => Some("NoWeightsCommitFound"),
+        51 => Some("InvalidRevealCommitHashNotMatch"),
+        52 => Some("CommitRevealEnabled"),
+        53 => Some("CommitRevealDisabled"),
+        54 => Some("LiquidAlphaDisabled"),
+        55 => Some("AlphaHighTooLow"),
+        56 => Some("AlphaLowOutOfRange"),
+        57 => Some("ColdKeyAlreadyAssociated"),
+        58 => Some("NotEnoughBalanceToPaySwapColdKey"),
+        59 => Some("ColdkeyIsInArbitration"),
+        60 => Some("InvalidChild"),
+        61 => Some("DuplicateChild"),
+        62 => Some("ProportionOverflow"),
+        63 => Some("TooManyChildren"),
+        64 => Some("TxRateLimitExceeded"),
+        65 => Some("SwapAlreadyScheduled"),
+        66 => Some("FailedToSchedule"),
+        67 => Some("NewColdKeyIsHotkey"),
+        68 => Some("InvalidChildkeyTake"),
+        69 => Some("TxChildkeyTakeRateLimitExceeded"),
+        70 => Some("InvalidIdentity"),
+        71 => Some("MechanismDoesNotExist"),
+        72 => Some("CannotUnstakeLock"),
+        73 => Some("SubnetNotExists"),
+        74 => Some("TooManyUnrevealedCommits"),
+        75 => Some("ExpiredWeightCommit"),
+        76 => Some("RevealTooEarly"),
+        77 => Some("InputLengthsUnequal"),
+        78 => Some("CommittingWeightsTooFast"),
+        79 => Some("AmountTooLow"),
+        80 => Some("InsufficientLiquidity"),
+        81 => Some("SlippageTooHigh"),
+        82 => Some("TransferDisallowed"),
+        83 => Some("ActivityCutoffTooLow"),
+        84 => Some("CallDisabled"),
+        85 => Some("FirstEmissionBlockNumberAlreadySet"),
+        86 => Some("NeedWaitingMoreBlocksToStarCall"),
+        87 => Some("NotEnoughAlphaOutToRecycle"),
+        88 => Some("CannotBurnOrRecycleOnRootSubnet"),
+        89 => Some("UnableToRecoverPublicKey"),
+        90 => Some("InvalidRecoveredPublicKey"),
+        91 => Some("SubtokenDisabled"),
+        92 => Some("HotKeySwapOnSubnetIntervalNotPassed"),
+        93 => Some("ZeroMaxStakeAmount"),
+        94 => Some("SameNetuid"),
+        95 => Some("InsufficientBalance"),
+        96 => Some("StakingOperationRateLimitExceeded"),
+        _ => None,
+    }
+}
+
 /// Format dispatch errors (tx reached chain but execution failed) with contextual hints.
 fn format_dispatch_error(e: subxt::Error) -> anyhow::Error {
-    let msg = e.to_string();
+    let raw_msg = e.to_string();
+    // If the error is a raw "Custom error: N", decode it so the named-error matchers below work.
+    let msg = if let Some(name) = decode_custom_error(&raw_msg) {
+        format!("{} [decoded: {}]", raw_msg, name)
+    } else {
+        raw_msg
+    };
     // Map common SubtensorModule errors to helpful messages
     let hint = if msg.contains("NotEnoughBalanceToStake") || msg.contains("NotEnoughStake") {
         "Insufficient balance or stake for this operation. Check `agcli balance` and `agcli stake list`."
-    } else if msg.contains("NotRegistered") || msg.contains("HotKeyNotRegisteredInSubNet") {
+    } else if msg.contains("NotRegistered")
+        || msg.contains("HotKeyNotRegisteredInSubNet")
+        || msg.contains("HotKeyNotRegisteredInNetwork")
+    {
         "Hotkey is not registered on this subnet. Register first with `agcli subnet register-neuron`."
     } else if msg.contains("NotEnoughBalance") || msg.contains("InsufficientBalance") {
         "Insufficient TAO balance. Check your balance with `agcli balance`."
@@ -813,6 +935,26 @@ fn format_dispatch_error(e: subxt::Error) -> anyhow::Error {
         "Delegate is already set for this hotkey."
     } else if msg.contains("InvalidTransaction") && msg.contains("proxy") {
         "Proxy transaction failed. Check that the proxy account has enough balance for fees and that the proxy type matches the operation."
+    } else if msg.contains("SubNetRegistrationDisabled") {
+        "Registration is disabled on this subnet."
+    } else if msg.contains("NoNeuronIdAvailable") {
+        "No neuron UID slots available on this subnet. Wait for a slot to open or try a different subnet."
+    } else if msg.contains("InsufficientBalance") || msg.contains("InsufficientLiquidity") {
+        "Insufficient balance for this operation. Check your balance with `agcli balance`."
+    } else if msg.contains("SubnetNotExists") {
+        "Subnet does not exist. Check available subnets with `agcli subnet list`."
+    } else if msg.contains("HotKeyAccountNotExists") {
+        "Hotkey account does not exist on chain. Fund it or register first."
+    } else if msg.contains("StakingOperationRateLimitExceeded")
+        || msg.contains("StakingRateLimitExceeded")
+    {
+        "Staking rate limit exceeded. Wait a few blocks before retrying."
+    } else if msg.contains("TooManyRegistrationsThisInterval") {
+        "Too many registrations this interval. Wait before retrying."
+    } else if msg.contains("SlippageTooHigh") {
+        "Slippage too high for this operation. Try a smaller amount or wait for better liquidity."
+    } else if msg.contains("AmountTooLow") {
+        "Amount is below the minimum threshold for this operation."
     } else {
         "" // no special hint
     };
@@ -931,6 +1073,52 @@ mod tests {
         assert!(
             msg.contains("Transaction failed on chain"),
             "unknown errors get generic message: {}",
+            msg
+        );
+    }
+
+    #[test]
+    fn decode_custom_error_6() {
+        assert_eq!(
+            decode_custom_error("Custom error: 6"),
+            Some("HotKeyNotRegisteredInNetwork")
+        );
+    }
+
+    #[test]
+    fn decode_custom_error_20() {
+        assert_eq!(
+            decode_custom_error("Custom error: 20"),
+            Some("TooManyRegistrationsThisBlock")
+        );
+    }
+
+    #[test]
+    fn decode_custom_error_21() {
+        assert_eq!(
+            decode_custom_error("Custom error: 21"),
+            Some("HotKeyAlreadyRegisteredInSubNet")
+        );
+    }
+
+    #[test]
+    fn decode_custom_error_unknown_index() {
+        assert_eq!(decode_custom_error("Custom error: 999"), None);
+    }
+
+    #[test]
+    fn decode_custom_error_no_match() {
+        assert_eq!(decode_custom_error("some other error text"), None);
+    }
+
+    #[test]
+    fn format_dispatch_error_custom_6_decoded() {
+        let err = subxt::Error::Other("Custom error: 6".to_string());
+        let result = format_dispatch_error(err);
+        let msg = format!("{:#}", result);
+        assert!(
+            msg.contains("not registered"),
+            "Custom error: 6 should decode to NotRegistered hint: {}",
             msg
         );
     }
