@@ -166,24 +166,33 @@ impl Client {
 
     // ──────── Neuron / Metagraph Queries ────────
 
-    /// Get lightweight neuron info for a subnet (via runtime API).
-    pub async fn get_neurons_lite(&self, netuid: NetUid) -> Result<Vec<NeuronInfoLite>> {
+    /// Get lightweight neuron info for a subnet (via runtime API, cached 30s).
+    /// Returns `Arc<Vec<NeuronInfoLite>>` to avoid cloning thousands of neuron records.
+    /// This is one of the most expensive chain queries — caching with request coalescing
+    /// prevents redundant fetches when multiple commands or views access the same subnet.
+    pub async fn get_neurons_lite(
+        &self,
+        netuid: NetUid,
+    ) -> Result<std::sync::Arc<Vec<NeuronInfoLite>>> {
         let inner = &self.inner;
         let nid = netuid.0;
-        let result = retry_on_transient("get_neurons_lite", RPC_RETRIES, || async {
-            let payload = api::apis().neuron_info_runtime_api().get_neurons_lite(nid);
-            let r = inner
-                .runtime_api()
-                .at_latest()
+        self.cache
+            .get_neurons_lite(nid, || async {
+                retry_on_transient("get_neurons_lite", RPC_RETRIES, || async {
+                    let payload = api::apis().neuron_info_runtime_api().get_neurons_lite(nid);
+                    let r = inner
+                        .runtime_api()
+                        .at_latest()
+                        .await
+                        .context("Failed to get latest block for neuron query")?
+                        .call(payload)
+                        .await
+                        .with_context(|| format!("Failed to query neurons for SN{}", nid))?;
+                    Ok(r.into_iter().map(NeuronInfoLite::from).collect())
+                })
                 .await
-                .context("Failed to get latest block for neuron query")?
-                .call(payload)
-                .await
-                .with_context(|| format!("Failed to query neurons for SN{}", nid))?;
-            Ok(r)
-        })
-        .await?;
-        Ok(result.into_iter().map(NeuronInfoLite::from).collect())
+            })
+            .await
     }
 
     /// Get full neuron info for a specific UID.

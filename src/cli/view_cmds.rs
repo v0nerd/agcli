@@ -412,7 +412,8 @@ async fn handle_validators(
             let bh = client.get_block_hash(bn).await?;
             client.get_neurons_lite_at_block(NetUid(nuid), bh).await?
         } else {
-            client.get_neurons_lite(NetUid(nuid)).await?
+            let arc = client.get_neurons_lite(NetUid(nuid)).await?;
+            std::sync::Arc::try_unwrap(arc).unwrap_or_else(|a| (*a).clone())
         };
         let mut validators: Vec<_> = neurons.into_iter().filter(|n| n.validator_permit).collect();
         validators.sort_by(|a, b| b.stake.rao().cmp(&a.stake.rao()));

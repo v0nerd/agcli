@@ -631,6 +631,7 @@ impl Client {
     ///
     /// 1. Single `at_latest()` call instead of N calls
     /// 2. All reads are from the same block (data consistency)
+    /// 3. All balance fetches run concurrently (parallel RPC calls)
     ///
     /// Returns `Vec<(ss58, Balance)>` in the same order as input.
     pub async fn get_balances_multi(&self, addresses: &[&str]) -> Result<Vec<(String, Balance)>> {
@@ -638,11 +639,18 @@ impl Client {
             return Ok(vec![]);
         }
         let block_hash = self.pin_latest_block().await?;
-        let mut results = Vec::with_capacity(addresses.len());
-        for addr in addresses {
-            let balance = self.get_balance_at_hash(addr, block_hash).await?;
-            results.push((addr.to_string(), balance));
-        }
+        // Fetch all balances concurrently instead of sequentially
+        let futures: Vec<_> = addresses
+            .iter()
+            .map(|addr| {
+                let addr_owned = addr.to_string();
+                async move {
+                    let balance = self.get_balance_at_hash(&addr_owned, block_hash).await?;
+                    Ok::<_, anyhow::Error>((addr_owned, balance))
+                }
+            })
+            .collect();
+        let results = futures::future::try_join_all(futures).await?;
         Ok(results)
     }
 

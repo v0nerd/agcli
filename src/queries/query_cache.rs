@@ -12,7 +12,7 @@ use moka::future::Cache;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::types::chain_data::{DelegateInfo, DynamicInfo, SubnetInfo};
+use crate::types::chain_data::{DelegateInfo, DynamicInfo, NeuronInfoLite, SubnetInfo};
 
 /// Default in-memory cache TTL in seconds.
 const DEFAULT_TTL_SECS: u64 = 30;
@@ -36,6 +36,8 @@ pub struct QueryCache {
     dynamic_by_netuid: Cache<u16, Arc<DynamicInfo>>,
     /// Cached delegate list (all delegates).
     delegates: Cache<(), Arc<Vec<DelegateInfo>>>,
+    /// Cached neurons_lite per subnet (keyed by netuid).
+    neurons_lite: Cache<u16, Arc<Vec<NeuronInfoLite>>>,
     /// Whether to use the disk cache layer. Disabled for tests with custom TTLs.
     use_disk: bool,
 }
@@ -59,6 +61,7 @@ impl QueryCache {
             all_dynamic: Cache::builder().time_to_live(ttl).max_capacity(1).build(),
             dynamic_by_netuid: Cache::builder().time_to_live(ttl).max_capacity(100).build(),
             delegates: Cache::builder().time_to_live(ttl).max_capacity(1).build(),
+            neurons_lite: Cache::builder().time_to_live(ttl).max_capacity(100).build(),
             use_disk,
         }
     }
@@ -238,12 +241,42 @@ impl QueryCache {
             .map_err(|e| anyhow::anyhow!("{}", e))
     }
 
+    /// Get or fetch neurons_lite for a specific subnet. Concurrent callers for the
+    /// same netuid coalesce into one fetch. Cached in-memory only (30s TTL).
+    /// This is one of the most expensive queries — returns thousands of neuron records.
+    pub async fn get_neurons_lite<F, Fut>(
+        &self,
+        netuid: u16,
+        fetch: F,
+    ) -> anyhow::Result<Arc<Vec<NeuronInfoLite>>>
+    where
+        F: FnOnce() -> Fut,
+        Fut: std::future::Future<Output = anyhow::Result<Vec<NeuronInfoLite>>>,
+    {
+        self.neurons_lite
+            .try_get_with(netuid, async {
+                tracing::debug!(netuid, "cache miss: neurons_lite — fetching from chain");
+                let start = std::time::Instant::now();
+                let data = fetch().await?;
+                tracing::debug!(
+                    netuid,
+                    elapsed_ms = start.elapsed().as_millis() as u64,
+                    count = data.len(),
+                    "fetched neurons_lite"
+                );
+                Ok(Arc::new(data)) as anyhow::Result<_>
+            })
+            .await
+            .map_err(|e| anyhow::anyhow!("{}", e))
+    }
+
     /// Invalidate all cached data (both in-memory and disk).
     pub async fn invalidate_all(&self) {
         self.subnets.invalidate_all();
         self.all_dynamic.invalidate_all();
         self.dynamic_by_netuid.invalidate_all();
         self.delegates.invalidate_all();
+        self.neurons_lite.invalidate_all();
         super::disk_cache::remove("all_subnets");
         super::disk_cache::remove("all_dynamic_info");
     }

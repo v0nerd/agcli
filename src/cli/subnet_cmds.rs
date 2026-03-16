@@ -343,7 +343,7 @@ pub(super) async fn handle_subnet(
                 let (neurons_lite, block) = if let Some(bn) = at_block {
                     let bh = client.get_block_hash(bn).await?;
                     let neurons = client.get_neurons_lite_at_block(NetUid(netuid), bh).await?;
-                    (neurons, bn as u64)
+                    (std::sync::Arc::new(neurons), bn as u64)
                 } else {
                     tokio::try_join!(
                         client.get_neurons_lite(NetUid(netuid)),
@@ -412,7 +412,7 @@ pub(super) async fn handle_subnet(
             let (neurons, block) = if let Some(bn) = at_block {
                 let bh = client.get_block_hash(bn).await?;
                 let neurons = client.get_neurons_lite_at_block(NetUid(netuid), bh).await?;
-                (neurons, bn as u64)
+                (std::sync::Arc::new(neurons), bn as u64)
             } else {
                 let (neurons, block) = tokio::try_join!(
                     client.get_neurons_lite(NetUid(netuid)),
@@ -440,7 +440,7 @@ pub(super) async fn handle_subnet(
                     uids: neurons.iter().map(|n| n.uid).collect(),
                     active: neurons.iter().map(|n| n.active).collect(),
                     last_update: neurons.iter().map(|n| n.last_update).collect(),
-                    neurons: neurons.clone(),
+                    neurons: neurons.to_vec(),
                 };
                 let path = crate::queries::cache::save(&mg)?;
                 eprintln!("Snapshot saved: {}", path.display());
@@ -1261,7 +1261,7 @@ async fn handle_subnet_monitor(
         let mut cur_map: HashMap<u16, NeuronSnapshot> = HashMap::new();
         let mut cur_uids: std::collections::HashSet<u16> = std::collections::HashSet::new();
 
-        for n in &neurons {
+        for n in neurons.iter() {
             cur_uids.insert(n.uid);
             cur_map.insert(
                 n.uid,

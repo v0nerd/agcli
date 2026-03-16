@@ -166,7 +166,7 @@ pub async fn live_metagraph(client: &Client, netuid: NetUid, interval_secs: u64)
         let prev_map: HashMap<u16, &crate::types::chain_data::NeuronInfoLite> =
             prev_neurons.iter().map(|n| (n.uid, n)).collect();
 
-        for c in &curr_neurons {
+        for c in curr_neurons.iter() {
             if let Some(p) = prev_map.get(&c.uid) {
                 let stake_diff = c.stake.rao() as i64 - p.stake.rao() as i64;
                 let incentive_diff = c.incentive - p.incentive;
