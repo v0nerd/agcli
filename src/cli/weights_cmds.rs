@@ -104,6 +104,12 @@ pub(super) async fn handle_weights(
             hotkey,
             limit,
         } => {
+            if let Some(ref hk) = hotkey {
+                validate_ss58(hk, "hotkey")?;
+            }
+            if let Some(lim) = limit {
+                validate_view_limit(lim, "weights show --limit")?;
+            }
             handle_weights_show(client, NetUid(netuid), hotkey.as_deref(), limit, ctx.output).await
         }
         WeightCommands::Set {
@@ -112,6 +118,7 @@ pub(super) async fn handle_weights(
             version_key,
             dry_run,
         } => {
+            validate_weight_input(&weights)?;
             let (uids, wts) = resolve_weights(&weights)?;
 
             // Pre-flight checks (always run these)
@@ -195,6 +202,7 @@ pub(super) async fn handle_weights(
             weights,
             salt,
         } => {
+            validate_weight_input(&weights)?;
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
             unlock_coldkey(&mut wallet, password)?;
             wallet.load_hotkey(hotkey_name)?;
@@ -227,6 +235,7 @@ pub(super) async fn handle_weights(
             salt,
             version_key,
         } => {
+            validate_weight_input(&weights)?;
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
             unlock_coldkey(&mut wallet, password)?;
             wallet.load_hotkey(hotkey_name)?;
@@ -265,6 +274,7 @@ pub(super) async fn handle_weights(
             version_key,
             wait,
         } => {
+            validate_weight_input(&weights)?;
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
             unlock_coldkey(&mut wallet, password)?;
             wallet.load_hotkey(hotkey_name)?;

@@ -1389,6 +1389,97 @@ pub fn validate_batch_file(content: &str, path: &str) -> Result<Vec<serde_json::
     Ok(arr.clone())
 }
 
+/// Validate weight input string before parsing.
+/// Catches common mistakes: empty input, bad separators, obviously wrong formats.
+pub fn validate_weight_input(input: &str) -> Result<()> {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        anyhow::bail!(
+            "Weight input cannot be empty.\n  Tip: use 'uid:weight' pairs (e.g., '0:100,1:200'), JSON array, or '@file.json'."
+        );
+    }
+    // stdin or file reference — valid, let resolve_weights handle it
+    if trimmed == "-" || trimmed.starts_with('@') {
+        return Ok(());
+    }
+    // JSON — valid format, let parser handle it
+    if trimmed.starts_with('[') || trimmed.starts_with('{') {
+        return Ok(());
+    }
+    // uid:weight pairs — basic structural check
+    for (i, pair) in trimmed.split(',').enumerate() {
+        let p = pair.trim();
+        if p.is_empty() {
+            anyhow::bail!(
+                "Empty weight pair at position {} (trailing comma?).\n  Tip: format is 'uid:weight,uid:weight' (e.g., '0:100,1:200').",
+                i
+            );
+        }
+        if !p.contains(':') {
+            anyhow::bail!(
+                "Invalid weight pair '{}' at position {} — missing ':' separator.\n  Tip: format is 'uid:weight' (e.g., '0:100').",
+                p, i
+            );
+        }
+        let parts: Vec<&str> = p.split(':').collect();
+        if parts.len() != 2 {
+            anyhow::bail!(
+                "Invalid weight pair '{}' at position {} — expected exactly one ':' separator.\n  Tip: format is 'uid:weight' (e.g., '0:100').",
+                p, i
+            );
+        }
+    }
+    Ok(())
+}
+
+/// Validate a view/history limit parameter.
+/// Must be at least 1, and capped at a reasonable maximum to prevent OOM.
+pub fn validate_view_limit(limit: usize, label: &str) -> Result<()> {
+    if limit == 0 {
+        anyhow::bail!(
+            "Invalid {}: limit must be at least 1.\n  Tip: use --limit 50 for a reasonable default.",
+            label
+        );
+    }
+    if limit > 10_000 {
+        anyhow::bail!(
+            "Invalid {}: limit {} is too large (max 10,000).\n  Tip: use a smaller limit to avoid excessive memory usage.",
+            label, limit
+        );
+    }
+    Ok(())
+}
+
+/// Validate admin raw call name. Must be a valid Rust identifier (snake_case).
+pub fn validate_admin_call_name(name: &str) -> Result<()> {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        anyhow::bail!(
+            "Admin call name cannot be empty.\n  Tip: use a call name like 'sudo_set_tempo'. Run `agcli admin list` to see available calls."
+        );
+    }
+    if trimmed.len() > 128 {
+        let preview: String = trimmed.chars().take(32).collect();
+        anyhow::bail!(
+            "Admin call name '{}...' is too long ({} chars, max 128).",
+            preview, trimmed.len()
+        );
+    }
+    if !trimmed.chars().next().unwrap().is_ascii_alphabetic() {
+        anyhow::bail!(
+            "Admin call name '{}' must start with a letter.\n  Tip: call names are snake_case, e.g. 'sudo_set_tempo'.",
+            trimmed
+        );
+    }
+    if let Some(bad) = trimmed.chars().find(|c| !c.is_ascii_alphanumeric() && *c != '_') {
+        anyhow::bail!(
+            "Admin call name contains invalid character '{}'.\n  Tip: use only letters, numbers, and underscores.",
+            bad
+        );
+    }
+    Ok(())
+}
+
 /// Parse an optional JSON string into a vec of subxt dynamic Values.
 /// Validates the JSON structure before converting.
 pub fn parse_json_args(args: &Option<String>) -> anyhow::Result<Vec<subxt::dynamic::Value>> {

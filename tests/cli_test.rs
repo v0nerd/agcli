@@ -9538,3 +9538,357 @@ fn parse_multisig_submit_missing_others() {
     ]);
     assert!(cli.is_err(), "multisig submit missing others should fail");
 }
+
+// =====================================================================
+// View commands — extra coverage (Step 14)
+// =====================================================================
+
+#[test]
+fn parse_view_portfolio_default() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "view", "portfolio"]);
+    assert!(cli.is_ok(), "view portfolio default: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_portfolio_both_args() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "view", "portfolio",
+        "--address", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        "--at-block", "500",
+    ]);
+    assert!(cli.is_ok(), "view portfolio both: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_neuron_missing_netuid_v2() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "view", "neuron", "--uid", "0"]);
+    assert!(cli.is_err(), "view neuron missing netuid should fail");
+}
+
+#[test]
+fn parse_view_network_default_v2() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "view", "network"]);
+    assert!(cli.is_ok(), "view network default: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_dynamic_default_v2() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "view", "dynamic"]);
+    assert!(cli.is_ok(), "view dynamic default: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_validators_default_v2() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "view", "validators"]);
+    assert!(cli.is_ok(), "view validators default: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_validators_with_limit_v2() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "view", "validators", "--limit", "100",
+    ]);
+    assert!(cli.is_ok(), "view validators limit: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_validators_all_args_v2() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "view", "validators", "--netuid", "5", "--limit", "25", "--at-block", "2000000",
+    ]);
+    assert!(cli.is_ok(), "view validators all args: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_history_default_v2() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "view", "history"]);
+    assert!(cli.is_ok(), "view history default: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_history_with_limit_v2() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "view", "history", "--limit", "100",
+    ]);
+    assert!(cli.is_ok(), "view history limit: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_history_with_address_and_limit() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "view", "history",
+        "--address", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        "--limit", "10",
+    ]);
+    assert!(cli.is_ok(), "view history addr+limit: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_account_default_v2() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "view", "account"]);
+    assert!(cli.is_ok(), "view account default: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_staking_analytics_default_v2() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "view", "staking-analytics"]);
+    assert!(cli.is_ok(), "view staking-analytics: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_swap_sim_alpha_v2() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "view", "swap-sim", "--netuid", "1", "--alpha", "100.0",
+    ]);
+    assert!(cli.is_ok(), "view swap-sim alpha: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_metagraph_all_args_v2() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "view", "metagraph", "--netuid", "1", "--since-block", "100000", "--limit", "10",
+    ]);
+    assert!(cli.is_ok(), "view metagraph all args: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_metagraph_missing_netuid_v2() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "view", "metagraph"]);
+    assert!(cli.is_err(), "view metagraph missing netuid should fail");
+}
+
+#[test]
+fn parse_view_health_with_tcp_v2() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "view", "health", "--netuid", "1", "--tcp-check",
+    ]);
+    assert!(cli.is_ok(), "view health tcp: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_emissions_with_limit_v2() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "view", "emissions", "--netuid", "1", "--limit", "25",
+    ]);
+    assert!(cli.is_ok(), "view emissions with limit: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_no_subcommand_v2() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "view"]);
+    assert!(cli.is_err(), "view without subcommand should fail");
+}
+
+// =====================================================================
+// Weights commands — extra coverage (Step 14)
+// =====================================================================
+
+#[test]
+fn parse_weights_set_version_key_v2() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "weights", "set", "--netuid", "1", "--weights", "0:100", "--version-key", "42",
+    ]);
+    assert!(cli.is_ok(), "weights set version-key: {:?}", cli.err());
+}
+
+#[test]
+fn parse_weights_set_json_input_v2() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "weights", "set", "--netuid", "1",
+        "--weights", r#"[{"uid":0,"weight":100}]"#,
+    ]);
+    assert!(cli.is_ok(), "weights set JSON: {:?}", cli.err());
+}
+
+#[test]
+fn parse_weights_set_file_input_v2() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "weights", "set", "--netuid", "1", "--weights", "@weights.json",
+    ]);
+    assert!(cli.is_ok(), "weights set file: {:?}", cli.err());
+}
+
+#[test]
+fn parse_weights_set_stdin_input_v2() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "weights", "set", "--netuid", "1", "--weights", "-",
+    ]);
+    assert!(cli.is_ok(), "weights set stdin: {:?}", cli.err());
+}
+
+#[test]
+fn parse_weights_show_with_limit_v2() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "weights", "show", "--netuid", "1", "--limit", "10",
+    ]);
+    assert!(cli.is_ok(), "weights show limit: {:?}", cli.err());
+}
+
+#[test]
+fn parse_weights_show_all_args_v2() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "weights", "show", "--netuid", "5",
+        "--hotkey", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        "--limit", "100",
+    ]);
+    assert!(cli.is_ok(), "weights show all: {:?}", cli.err());
+}
+
+#[test]
+fn parse_weights_commit_reveal_wait_v2() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "weights", "commit-reveal", "--netuid", "1", "--weights", "0:100", "--wait",
+    ]);
+    assert!(cli.is_ok(), "weights commit-reveal wait: {:?}", cli.err());
+}
+
+#[test]
+fn parse_weights_commit_reveal_all_args_v2() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "weights", "commit-reveal", "--netuid", "42",
+        "--weights", r#"{"0":100,"1":200}"#, "--version-key", "7", "--wait",
+    ]);
+    assert!(cli.is_ok(), "weights commit-reveal all: {:?}", cli.err());
+}
+
+#[test]
+fn parse_weights_no_subcommand_v2() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "weights"]);
+    assert!(cli.is_err(), "weights without subcommand should fail");
+}
+
+// =====================================================================
+// Admin commands — extra coverage (Step 14)
+// =====================================================================
+
+#[test]
+fn parse_admin_set_tempo_with_global_v2() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--network", "local", "admin", "set-tempo",
+        "--netuid", "1", "--tempo", "360", "--sudo-key", "//Alice",
+    ]);
+    assert!(cli.is_ok(), "admin set-tempo global: {:?}", cli.err());
+}
+
+#[test]
+fn parse_admin_raw_basic_v2() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "raw", "--call", "sudo_set_tempo",
+        "--args", "[1, 360]", "--sudo-key", "//Alice",
+    ]);
+    assert!(cli.is_ok(), "admin raw basic: {:?}", cli.err());
+}
+
+#[test]
+fn parse_admin_raw_complex_args_v2() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "raw",
+        "--call", "sudo_set_max_registrations_per_block",
+        "--args", "[1, 5, true]", "--sudo-key", "//Bob",
+    ]);
+    assert!(cli.is_ok(), "admin raw complex: {:?}", cli.err());
+}
+
+#[test]
+fn parse_admin_list_json_v2() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--output", "json", "admin", "list",
+    ]);
+    assert!(cli.is_ok(), "admin list json: {:?}", cli.err());
+}
+
+#[test]
+fn parse_admin_set_max_validators_boundary_v2() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "set-max-validators", "--netuid", "1", "--max", "65535",
+    ]);
+    assert!(cli.is_ok(), "admin set-max-validators max: {:?}", cli.err());
+}
+
+#[test]
+fn parse_admin_set_weights_rate_limit_large_v2() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "set-weights-rate-limit",
+        "--netuid", "1", "--limit", "18446744073709551615",
+    ]);
+    assert!(cli.is_ok(), "admin weights rate u64 max: {:?}", cli.err());
+}
+
+#[test]
+fn parse_admin_no_subcommand_v2() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "admin"]);
+    assert!(cli.is_err(), "admin without subcommand should fail");
+}
+
+// =====================================================================
+// Diff commands — extra coverage (Step 14)
+// =====================================================================
+
+#[test]
+fn parse_diff_portfolio_basic_v2() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "diff", "portfolio",
+        "--address", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        "--block1", "100", "--block2", "200",
+    ]);
+    assert!(cli.is_ok(), "diff portfolio: {:?}", cli.err());
+}
+
+#[test]
+fn parse_diff_portfolio_missing_blocks_v2() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "diff", "portfolio",
+        "--address", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(cli.is_err(), "diff portfolio missing blocks should fail");
+}
+
+#[test]
+fn parse_diff_portfolio_same_block_v2() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "diff", "portfolio",
+        "--address", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        "--block1", "100", "--block2", "100",
+    ]);
+    assert!(cli.is_ok(), "diff portfolio same block: {:?}", cli.err());
+}
+
+#[test]
+fn parse_diff_subnet_max_blocks_v2() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "diff", "subnet", "--netuid", "1",
+        "--block1", "0", "--block2", "4294967295",
+    ]);
+    assert!(cli.is_ok(), "diff subnet max: {:?}", cli.err());
+}
+
+// =====================================================================
+// Weight parsing — JSON format edge cases (Step 14)
+// =====================================================================
+
+#[test]
+fn parse_weights_set_json_object_format_v2() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "weights", "set", "--netuid", "1",
+        "--weights", r#"{"0":100,"1":200,"2":300}"#,
+    ]);
+    assert!(cli.is_ok(), "weights set JSON object: {:?}", cli.err());
+}
+
+#[test]
+fn parse_weights_set_large_version_key_v2() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "weights", "set", "--netuid", "1",
+        "--weights", "0:100", "--version-key", "18446744073709551615",
+    ]);
+    assert!(cli.is_ok(), "weights set max version-key: {:?}", cli.err());
+}
+
+#[test]
+fn parse_weights_set_with_global_dry_run_v2() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--network", "test", "--output", "json",
+        "weights", "set", "--netuid", "1", "--weights", "0:100", "--dry-run",
+    ]);
+    assert!(cli.is_ok(), "weights set global+dry-run: {:?}", cli.err());
+}

@@ -2,12 +2,13 @@
 //! Run with: cargo test --test helpers_test
 
 use agcli::cli::helpers::{
-    json_to_subxt_value, parse_children, parse_weight_pairs, validate_amount,
-    validate_batch_file, validate_delegate_take, validate_derive_input,
+    json_to_subxt_value, parse_children, parse_weight_pairs, validate_admin_call_name,
+    validate_amount, validate_batch_file, validate_delegate_take, validate_derive_input,
     validate_emission_weights, validate_evm_address, validate_gas_limit,
     validate_hex_data, validate_ipv4, validate_max_cost, validate_mnemonic,
     validate_multisig_json_args, validate_name, validate_pallet_call,
-    validate_schedule_id, validate_symbol, validate_take_pct, validate_wasm_file,
+    validate_schedule_id, validate_symbol, validate_take_pct, validate_view_limit,
+    validate_wasm_file, validate_weight_input,
 };
 use agcli::utils::explain;
 
@@ -3240,4 +3241,307 @@ fn batch_file_extra_fields_ok() {
     // Extra fields besides pallet/call/args should be tolerated
     let json = r#"[{"pallet":"System","call":"remark","args":[],"comment":"my note","priority":1}]"#;
     assert!(validate_batch_file(json, "test.json").is_ok());
+}
+
+// =====================================================================
+// validate_weight_input()
+// =====================================================================
+
+#[test]
+fn weight_input_valid_pairs() {
+    assert!(validate_weight_input("0:100,1:200").is_ok());
+}
+
+#[test]
+fn weight_input_single_pair() {
+    assert!(validate_weight_input("0:100").is_ok());
+}
+
+#[test]
+fn weight_input_with_spaces() {
+    assert!(validate_weight_input("  0:100 , 1:200  ").is_ok());
+}
+
+#[test]
+fn weight_input_stdin() {
+    assert!(validate_weight_input("-").is_ok());
+}
+
+#[test]
+fn weight_input_file_ref() {
+    assert!(validate_weight_input("@weights.json").is_ok());
+}
+
+#[test]
+fn weight_input_json_array() {
+    assert!(validate_weight_input(r#"[{"uid":0,"weight":100}]"#).is_ok());
+}
+
+#[test]
+fn weight_input_json_object() {
+    assert!(validate_weight_input(r#"{"0":100}"#).is_ok());
+}
+
+#[test]
+fn weight_input_empty() {
+    let err = validate_weight_input("").unwrap_err();
+    assert!(err.to_string().contains("cannot be empty"), "got: {}", err);
+}
+
+#[test]
+fn weight_input_whitespace_only() {
+    let err = validate_weight_input("   ").unwrap_err();
+    assert!(err.to_string().contains("cannot be empty"), "got: {}", err);
+}
+
+#[test]
+fn weight_input_missing_colon() {
+    let err = validate_weight_input("0100").unwrap_err();
+    assert!(err.to_string().contains("missing ':'"), "got: {}", err);
+}
+
+#[test]
+fn weight_input_trailing_comma() {
+    let err = validate_weight_input("0:100,").unwrap_err();
+    assert!(err.to_string().contains("Empty weight pair"), "got: {}", err);
+}
+
+#[test]
+fn weight_input_double_colon() {
+    let err = validate_weight_input("0:1:2").unwrap_err();
+    assert!(err.to_string().contains("exactly one ':'"), "got: {}", err);
+}
+
+#[test]
+fn weight_input_leading_comma() {
+    let err = validate_weight_input(",0:100").unwrap_err();
+    assert!(err.to_string().contains("Empty weight pair"), "got: {}", err);
+}
+
+#[test]
+fn weight_input_middle_empty() {
+    let err = validate_weight_input("0:100,,1:200").unwrap_err();
+    assert!(err.to_string().contains("Empty weight pair"), "got: {}", err);
+}
+
+#[test]
+fn weight_input_no_value() {
+    // "0:" has a colon but no value — this passes pre-validation, parse_weight_pairs catches it
+    assert!(validate_weight_input("0:").is_ok());
+}
+
+// =====================================================================
+// validate_view_limit()
+// =====================================================================
+
+#[test]
+fn view_limit_valid() {
+    assert!(validate_view_limit(1, "test").is_ok());
+    assert!(validate_view_limit(50, "test").is_ok());
+    assert!(validate_view_limit(10_000, "test").is_ok());
+}
+
+#[test]
+fn view_limit_zero() {
+    let err = validate_view_limit(0, "test").unwrap_err();
+    assert!(err.to_string().contains("at least 1"), "got: {}", err);
+}
+
+#[test]
+fn view_limit_too_large() {
+    let err = validate_view_limit(10_001, "test").unwrap_err();
+    assert!(err.to_string().contains("too large"), "got: {}", err);
+}
+
+#[test]
+fn view_limit_max_boundary() {
+    assert!(validate_view_limit(10_000, "test").is_ok());
+    assert!(validate_view_limit(10_001, "test").is_err());
+}
+
+#[test]
+fn view_limit_label_in_error() {
+    let err = validate_view_limit(0, "validators --limit").unwrap_err();
+    assert!(err.to_string().contains("validators --limit"), "got: {}", err);
+}
+
+#[test]
+fn view_limit_huge() {
+    let err = validate_view_limit(usize::MAX, "test").unwrap_err();
+    assert!(err.to_string().contains("too large"), "got: {}", err);
+}
+
+// =====================================================================
+// validate_admin_call_name()
+// =====================================================================
+
+#[test]
+fn admin_call_valid_names() {
+    assert!(validate_admin_call_name("sudo_set_tempo").is_ok());
+    assert!(validate_admin_call_name("set_max_allowed_validators").is_ok());
+    assert!(validate_admin_call_name("SetTempo").is_ok());
+    assert!(validate_admin_call_name("a").is_ok());
+}
+
+#[test]
+fn admin_call_empty() {
+    let err = validate_admin_call_name("").unwrap_err();
+    assert!(err.to_string().contains("cannot be empty"), "got: {}", err);
+}
+
+#[test]
+fn admin_call_whitespace_only() {
+    let err = validate_admin_call_name("   ").unwrap_err();
+    assert!(err.to_string().contains("cannot be empty"), "got: {}", err);
+}
+
+#[test]
+fn admin_call_starts_with_number() {
+    let err = validate_admin_call_name("1set_tempo").unwrap_err();
+    assert!(err.to_string().contains("must start with a letter"), "got: {}", err);
+}
+
+#[test]
+fn admin_call_starts_with_underscore() {
+    let err = validate_admin_call_name("_hidden").unwrap_err();
+    assert!(err.to_string().contains("must start with a letter"), "got: {}", err);
+}
+
+#[test]
+fn admin_call_special_chars() {
+    let err = validate_admin_call_name("sudo.set.tempo").unwrap_err();
+    assert!(err.to_string().contains("invalid character"), "got: {}", err);
+}
+
+#[test]
+fn admin_call_spaces() {
+    let err = validate_admin_call_name("sudo set tempo").unwrap_err();
+    assert!(err.to_string().contains("invalid character"), "got: {}", err);
+}
+
+#[test]
+fn admin_call_too_long() {
+    let long = "a".repeat(129);
+    let err = validate_admin_call_name(&long).unwrap_err();
+    assert!(err.to_string().contains("too long"), "got: {}", err);
+}
+
+#[test]
+fn admin_call_exact_max_length() {
+    let name = "a".repeat(128);
+    assert!(validate_admin_call_name(&name).is_ok());
+}
+
+#[test]
+fn admin_call_with_hyphen() {
+    let err = validate_admin_call_name("sudo-set-tempo").unwrap_err();
+    assert!(err.to_string().contains("invalid character"), "got: {}", err);
+}
+
+#[test]
+fn admin_call_unicode() {
+    let err = validate_admin_call_name("südö_set").unwrap_err();
+    assert!(err.to_string().contains("must start with a letter") || err.to_string().contains("invalid character"), "got: {}", err);
+}
+
+#[test]
+fn admin_call_with_numbers_ok() {
+    assert!(validate_admin_call_name("set_max_uids_v2").is_ok());
+}
+
+#[test]
+fn admin_call_tip_mentions_list() {
+    let err = validate_admin_call_name("").unwrap_err();
+    assert!(err.to_string().contains("agcli admin list"), "got: {}", err);
+}
+
+// =====================================================================
+// parse_weight_pairs — extended edge cases
+// =====================================================================
+
+#[test]
+fn parse_weight_pairs_max_uid() {
+    let (uids, weights) = parse_weight_pairs("65535:100").unwrap();
+    assert_eq!(uids, vec![65535]);
+    assert_eq!(weights, vec![100]);
+}
+
+#[test]
+fn parse_weight_pairs_zero_weight() {
+    let (uids, weights) = parse_weight_pairs("0:0").unwrap();
+    assert_eq!(uids, vec![0]);
+    assert_eq!(weights, vec![0]);
+}
+
+#[test]
+fn parse_weight_pairs_uid_overflow() {
+    let err = parse_weight_pairs("65536:100").unwrap_err();
+    assert!(err.to_string().contains("Invalid UID"), "got: {}", err);
+}
+
+#[test]
+fn parse_weight_pairs_weight_overflow() {
+    let err = parse_weight_pairs("0:65536").unwrap_err();
+    assert!(err.to_string().contains("Invalid weight"), "got: {}", err);
+}
+
+#[test]
+fn parse_weight_pairs_negative_uid_v2() {
+    let err = parse_weight_pairs("-1:100").unwrap_err();
+    assert!(err.to_string().contains("Invalid UID"), "got: {}", err);
+}
+
+#[test]
+fn parse_weight_pairs_negative_weight_v2() {
+    let err = parse_weight_pairs("0:-100").unwrap_err();
+    assert!(err.to_string().contains("Invalid weight"), "got: {}", err);
+}
+
+#[test]
+fn parse_weight_pairs_float_uid() {
+    let err = parse_weight_pairs("0.5:100").unwrap_err();
+    assert!(err.to_string().contains("Invalid UID"), "got: {}", err);
+}
+
+#[test]
+fn parse_weight_pairs_text_uid() {
+    let err = parse_weight_pairs("abc:100").unwrap_err();
+    assert!(err.to_string().contains("Invalid UID"), "got: {}", err);
+}
+
+#[test]
+fn parse_weight_pairs_text_weight() {
+    let err = parse_weight_pairs("0:abc").unwrap_err();
+    assert!(err.to_string().contains("Invalid weight"), "got: {}", err);
+}
+
+#[test]
+fn parse_weight_pairs_max_weight() {
+    let (_, weights) = parse_weight_pairs("0:65535").unwrap();
+    assert_eq!(weights, vec![65535]);
+}
+
+#[test]
+fn parse_weight_pairs_many() {
+    let pairs: Vec<String> = (0..100).map(|i| format!("{}:{}", i, i * 10)).collect();
+    let input = pairs.join(",");
+    let (uids, weights) = parse_weight_pairs(&input).unwrap();
+    assert_eq!(uids.len(), 100);
+    assert_eq!(weights.len(), 100);
+    assert_eq!(uids[99], 99);
+    assert_eq!(weights[99], 990);
+}
+
+#[test]
+fn parse_weight_pairs_duplicate_uid() {
+    // Duplicates are allowed at parse level (chain will handle)
+    let (uids, _) = parse_weight_pairs("0:100,0:200").unwrap();
+    assert_eq!(uids, vec![0, 0]);
+}
+
+#[test]
+fn parse_weight_pairs_spaces_around_values() {
+    let (uids, weights) = parse_weight_pairs(" 0 : 100 , 1 : 200 ").unwrap();
+    assert_eq!(uids, vec![0, 1]);
+    assert_eq!(weights, vec![100, 200]);
 }

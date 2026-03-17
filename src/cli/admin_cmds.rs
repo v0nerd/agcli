@@ -187,6 +187,7 @@ pub(super) async fn handle_admin(cmd: AdminCommands, client: &Client, ctx: &Ctx<
             args,
             sudo_key,
         } => {
+            validate_admin_call_name(&call)?;
             let pair = resolve_sudo_key(&sudo_key, ctx)?;
             // Parse args as JSON array of values
             let values = parse_raw_args(&args)?;

@@ -39,8 +39,12 @@ pub async fn handle_view(cmd: ViewCommands, client: &Client, ctx: &Ctx<'_>) -> R
             netuid,
             limit,
             at_block,
-        } => handle_validators(client, output, netuid, limit, at_block).await,
+        } => {
+            validate_view_limit(limit, "validators --limit")?;
+            handle_validators(client, output, netuid, limit, at_block).await
+        }
         ViewCommands::History { address, limit } => {
+            validate_view_limit(limit, "history --limit")?;
             let addr = resolve_coldkey_address(address, wallet_dir, wallet_name);
             handle_history(&addr, output, limit).await
         }
@@ -56,9 +60,21 @@ pub async fn handle_view(cmd: ViewCommands, client: &Client, ctx: &Ctx<'_>) -> R
             handle_staking_analytics(client, &addr, output).await
         }
         ViewCommands::SwapSim { netuid, tao, alpha } => {
+            if let Some(t) = tao {
+                validate_amount(t, "swap --tao")?;
+            }
+            if let Some(a) = alpha {
+                validate_amount(a, "swap --alpha")?;
+            }
+            if tao.is_none() && alpha.is_none() {
+                anyhow::bail!("Specify either --tao or --alpha for swap simulation.\n  Tip: use --tao 1.0 to simulate swapping 1 TAO to alpha.");
+            }
             handle_swap_sim(client, netuid, tao, alpha, output).await
         }
-        ViewCommands::Nominations { hotkey } => handle_nominations(client, &hotkey, output).await,
+        ViewCommands::Nominations { hotkey } => {
+            validate_ss58(&hotkey, "nominations --hotkey")?;
+            handle_nominations(client, &hotkey, output).await
+        }
         ViewCommands::Metagraph {
             netuid,
             since_block,
@@ -73,7 +89,12 @@ pub async fn handle_view(cmd: ViewCommands, client: &Client, ctx: &Ctx<'_>) -> R
             netuid,
             uid,
             hotkey,
-        } => handle_axon_lookup(client, NetUid(netuid), uid, hotkey.as_deref(), output).await,
+        } => {
+            if let Some(ref hk) = hotkey {
+                validate_ss58(hk, "axon --hotkey")?;
+            }
+            handle_axon_lookup(client, NetUid(netuid), uid, hotkey.as_deref(), output).await
+        }
         ViewCommands::Health {
             netuid,
             tcp_check,
