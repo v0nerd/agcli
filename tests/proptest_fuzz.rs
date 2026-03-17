@@ -15,8 +15,9 @@ use agcli::cli::helpers::{
     validate_emission_weights, validate_event_filter, validate_evm_address,
     validate_hex_data, validate_ipv4, validate_max_cost, validate_mnemonic,
     validate_multisig_json_args, validate_name, validate_netuid, validate_pallet_call,
-    validate_password_strength, validate_port, validate_price, validate_schedule_id,
-    validate_ss58, validate_symbol, validate_take_pct,
+    validate_password_strength, validate_port, validate_price, validate_proxy_type,
+    validate_schedule_id, validate_spending_limit, validate_ss58, validate_symbol,
+    validate_take_pct,
 };
 
 // ──── validate_amount: never panics, valid amounts always accepted ────
@@ -1028,5 +1029,90 @@ proptest! {
     #[test]
     fn fuzz_event_filter_no_panic(s in "\\PC{0,100}") {
         let _ = validate_event_filter(&s);
+    }
+
+    // ──── validate_proxy_type: never panics on arbitrary input ────
+
+    #[test]
+    fn fuzz_proxy_type_no_panic(s in "\\PC{0,200}") {
+        let _ = validate_proxy_type(&s);
+    }
+
+    #[test]
+    fn fuzz_proxy_type_known_types_accepted(
+        s in prop_oneof![
+            Just("any".to_string()),
+            Just("owner".to_string()),
+            Just("staking".to_string()),
+            Just("transfer".to_string()),
+            Just("nontransfer".to_string()),
+            Just("non_transfer".to_string()),
+            Just("governance".to_string()),
+            Just("senate".to_string()),
+            Just("registration".to_string()),
+            Just("nonfungible".to_string()),
+            Just("non_fungible".to_string()),
+            Just("smalltransfer".to_string()),
+            Just("small_transfer".to_string()),
+            Just("rootweights".to_string()),
+            Just("root_weights".to_string()),
+            Just("childkeys".to_string()),
+            Just("child_keys".to_string()),
+            Just("triumvirate".to_string()),
+            Just("noncritical".to_string()),
+            Just("non_critical".to_string()),
+            Just("swaphotkey".to_string()),
+            Just("swap_hotkey".to_string()),
+            Just("rootclaim".to_string()),
+            Just("root_claim".to_string()),
+            Just("subnetleasebeneficiary".to_string()),
+            Just("subnet_lease_beneficiary".to_string()),
+            Just("sudouncheckedsetcode".to_string()),
+            Just("sudo_unchecked_set_code".to_string()),
+        ]
+    ) {
+        prop_assert!(validate_proxy_type(&s).is_ok(),
+            "known proxy type '{}' should be accepted", s);
+    }
+
+    #[test]
+    fn fuzz_proxy_type_random_rejected(s in "[a-z]{6,30}") {
+        // Most random 6+ char lowercase strings won't match a known type
+        // Only skip if it happens to be a valid type
+        let known = [
+            "any", "owner", "staking", "transfer", "nontransfer", "governance",
+            "senate", "registration", "nonfungible", "smalltransfer", "rootweights",
+            "childkeys", "triumvirate", "noncritical", "swaphotkey", "rootclaim",
+            "subnetleasebeneficiary", "sudouncheckedsetcode",
+        ];
+        if !known.contains(&s.as_str()) {
+            prop_assert!(validate_proxy_type(&s).is_err(),
+                "random string '{}' should be rejected", s);
+        }
+    }
+
+    // ──── validate_spending_limit: never panics, checks bounds ────
+
+    #[test]
+    fn fuzz_spending_limit_no_panic(v in proptest::num::f64::ANY, n in 0u16..=65535u16) {
+        let _ = validate_spending_limit(v, &n.to_string());
+    }
+
+    #[test]
+    fn fuzz_spending_limit_positive_finite_accepted(v in 0.0f64..1e18) {
+        prop_assert!(validate_spending_limit(v, "1").is_ok(),
+            "positive finite {} should be accepted", v);
+    }
+
+    #[test]
+    fn fuzz_spending_limit_negative_rejected(v in -1e18f64..-0.001) {
+        prop_assert!(validate_spending_limit(v, "1").is_err(),
+            "negative {} should be rejected", v);
+    }
+
+    #[test]
+    fn fuzz_spending_limit_invalid_netuid_rejected(s in "[a-zA-Z]{1,10}") {
+        prop_assert!(validate_spending_limit(100.0, &s).is_err(),
+            "non-numeric netuid '{}' should be rejected", s);
     }
 }

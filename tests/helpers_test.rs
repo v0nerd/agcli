@@ -3844,3 +3844,253 @@ fn validate_github_repo_hash_character() {
 fn validate_github_repo_single_chars() {
     assert!(validate_github_repo("a/b").is_ok());
 }
+
+// ── validate_proxy_type ──
+
+use agcli::cli::helpers::validate_proxy_type;
+
+#[test]
+fn validate_proxy_type_any() {
+    assert!(validate_proxy_type("any").is_ok());
+    assert!(validate_proxy_type("Any").is_ok());
+    assert!(validate_proxy_type("ANY").is_ok());
+}
+
+#[test]
+fn validate_proxy_type_owner() {
+    assert!(validate_proxy_type("owner").is_ok());
+    assert!(validate_proxy_type("Owner").is_ok());
+}
+
+#[test]
+fn validate_proxy_type_staking() {
+    assert!(validate_proxy_type("staking").is_ok());
+    assert!(validate_proxy_type("Staking").is_ok());
+    assert!(validate_proxy_type("STAKING").is_ok());
+}
+
+#[test]
+fn validate_proxy_type_transfer() {
+    assert!(validate_proxy_type("transfer").is_ok());
+    assert!(validate_proxy_type("Transfer").is_ok());
+}
+
+#[test]
+fn validate_proxy_type_nontransfer_variants() {
+    assert!(validate_proxy_type("nontransfer").is_ok());
+    assert!(validate_proxy_type("NonTransfer").is_ok());
+    assert!(validate_proxy_type("non_transfer").is_ok());
+}
+
+#[test]
+fn validate_proxy_type_noncritical_variants() {
+    assert!(validate_proxy_type("noncritical").is_ok());
+    assert!(validate_proxy_type("non_critical").is_ok());
+    assert!(validate_proxy_type("NonCritical").is_ok());
+}
+
+#[test]
+fn validate_proxy_type_governance() {
+    assert!(validate_proxy_type("governance").is_ok());
+    assert!(validate_proxy_type("Governance").is_ok());
+}
+
+#[test]
+fn validate_proxy_type_senate() {
+    assert!(validate_proxy_type("senate").is_ok());
+    assert!(validate_proxy_type("Senate").is_ok());
+}
+
+#[test]
+fn validate_proxy_type_registration() {
+    assert!(validate_proxy_type("registration").is_ok());
+    assert!(validate_proxy_type("Registration").is_ok());
+}
+
+#[test]
+fn validate_proxy_type_nonfungible() {
+    assert!(validate_proxy_type("nonfungible").is_ok());
+    assert!(validate_proxy_type("non_fungible").is_ok());
+}
+
+#[test]
+fn validate_proxy_type_smalltransfer() {
+    assert!(validate_proxy_type("smalltransfer").is_ok());
+    assert!(validate_proxy_type("small_transfer").is_ok());
+}
+
+#[test]
+fn validate_proxy_type_rootweights() {
+    assert!(validate_proxy_type("rootweights").is_ok());
+    assert!(validate_proxy_type("root_weights").is_ok());
+}
+
+#[test]
+fn validate_proxy_type_childkeys() {
+    assert!(validate_proxy_type("childkeys").is_ok());
+    assert!(validate_proxy_type("child_keys").is_ok());
+}
+
+#[test]
+fn validate_proxy_type_triumvirate() {
+    assert!(validate_proxy_type("triumvirate").is_ok());
+    assert!(validate_proxy_type("Triumvirate").is_ok());
+}
+
+#[test]
+fn validate_proxy_type_swaphotkey() {
+    assert!(validate_proxy_type("swaphotkey").is_ok());
+    assert!(validate_proxy_type("swap_hotkey").is_ok());
+}
+
+#[test]
+fn validate_proxy_type_subnetleasebeneficiary() {
+    assert!(validate_proxy_type("subnetleasebeneficiary").is_ok());
+    assert!(validate_proxy_type("subnet_lease_beneficiary").is_ok());
+}
+
+#[test]
+fn validate_proxy_type_rootclaim() {
+    assert!(validate_proxy_type("rootclaim").is_ok());
+    assert!(validate_proxy_type("root_claim").is_ok());
+}
+
+#[test]
+fn validate_proxy_type_sudo_unchecked_set_code() {
+    assert!(validate_proxy_type("sudouncheckedsetcode").is_ok());
+    assert!(validate_proxy_type("sudo_unchecked_set_code").is_ok());
+}
+
+#[test]
+fn validate_proxy_type_empty_rejected() {
+    let err = validate_proxy_type("").unwrap_err();
+    assert!(err.to_string().contains("cannot be empty"), "err: {}", err);
+}
+
+#[test]
+fn validate_proxy_type_typo_rejected() {
+    let err = validate_proxy_type("Stakking").unwrap_err();
+    assert!(err.to_string().contains("Unknown proxy type"), "err: {}", err);
+    assert!(err.to_string().contains("Staking"), "should suggest valid types: {}", err);
+}
+
+#[test]
+fn validate_proxy_type_random_string_rejected() {
+    let err = validate_proxy_type("foobar123").unwrap_err();
+    assert!(err.to_string().contains("Unknown proxy type"), "err: {}", err);
+}
+
+#[test]
+fn validate_proxy_type_numeric_rejected() {
+    let err = validate_proxy_type("42").unwrap_err();
+    assert!(err.to_string().contains("Unknown proxy type"), "err: {}", err);
+}
+
+#[test]
+fn validate_proxy_type_whitespace_rejected() {
+    let err = validate_proxy_type("  ").unwrap_err();
+    assert!(err.to_string().contains("Unknown proxy type"), "err: {}", err);
+}
+
+#[test]
+fn validate_proxy_type_partial_match_rejected() {
+    // "stake" is not a valid type — must be "staking"
+    let err = validate_proxy_type("stake").unwrap_err();
+    assert!(err.to_string().contains("Unknown proxy type"), "err: {}", err);
+}
+
+#[test]
+fn validate_proxy_type_special_chars_rejected() {
+    let err = validate_proxy_type("any;drop").unwrap_err();
+    assert!(err.to_string().contains("Unknown proxy type"), "err: {}", err);
+}
+
+// ── validate_spending_limit ──
+
+use agcli::cli::helpers::validate_spending_limit;
+
+#[test]
+fn validate_spending_limit_valid() {
+    assert!(validate_spending_limit(100.0, "1").is_ok());
+}
+
+#[test]
+fn validate_spending_limit_zero() {
+    assert!(validate_spending_limit(0.0, "1").is_ok());
+}
+
+#[test]
+fn validate_spending_limit_large_valid() {
+    assert!(validate_spending_limit(1_000_000.0, "0").is_ok());
+}
+
+#[test]
+fn validate_spending_limit_max_netuid() {
+    assert!(validate_spending_limit(50.0, "65535").is_ok());
+}
+
+#[test]
+fn validate_spending_limit_negative_rejected() {
+    let err = validate_spending_limit(-100.0, "1").unwrap_err();
+    assert!(err.to_string().contains("negative"), "err: {}", err);
+}
+
+#[test]
+fn validate_spending_limit_tiny_negative_rejected() {
+    let err = validate_spending_limit(-0.001, "1").unwrap_err();
+    assert!(err.to_string().contains("negative"), "err: {}", err);
+}
+
+#[test]
+fn validate_spending_limit_infinity_rejected() {
+    let err = validate_spending_limit(f64::INFINITY, "1").unwrap_err();
+    assert!(err.to_string().contains("finite"), "err: {}", err);
+}
+
+#[test]
+fn validate_spending_limit_neg_infinity_rejected() {
+    let err = validate_spending_limit(f64::NEG_INFINITY, "1").unwrap_err();
+    assert!(err.to_string().contains("finite"), "err: {}", err);
+}
+
+#[test]
+fn validate_spending_limit_nan_rejected() {
+    let err = validate_spending_limit(f64::NAN, "1").unwrap_err();
+    assert!(err.to_string().contains("finite"), "err: {}", err);
+}
+
+#[test]
+fn validate_spending_limit_non_numeric_netuid() {
+    let err = validate_spending_limit(100.0, "abc").unwrap_err();
+    assert!(err.to_string().contains("Invalid netuid"), "err: {}", err);
+}
+
+#[test]
+fn validate_spending_limit_empty_netuid() {
+    let err = validate_spending_limit(100.0, "").unwrap_err();
+    assert!(err.to_string().contains("Invalid netuid"), "err: {}", err);
+}
+
+#[test]
+fn validate_spending_limit_netuid_overflow() {
+    let err = validate_spending_limit(100.0, "99999").unwrap_err();
+    assert!(err.to_string().contains("Invalid netuid"), "err: {}", err);
+}
+
+#[test]
+fn validate_spending_limit_netuid_negative() {
+    let err = validate_spending_limit(100.0, "-1").unwrap_err();
+    assert!(err.to_string().contains("Invalid netuid"), "err: {}", err);
+}
+
+#[test]
+fn validate_spending_limit_netuid_with_text() {
+    let err = validate_spending_limit(100.0, "1abc").unwrap_err();
+    assert!(err.to_string().contains("Invalid netuid"), "err: {}", err);
+}
+
+#[test]
+fn validate_spending_limit_fractional_valid() {
+    assert!(validate_spending_limit(0.5, "1").is_ok());
+    assert!(validate_spending_limit(99.99, "2").is_ok());
+}

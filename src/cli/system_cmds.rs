@@ -46,6 +46,7 @@ pub(super) async fn handle_config(cmd: ConfigCommands) -> Result<()> {
                 k if k.starts_with("spending_limit.") => {
                     let netuid = &k["spending_limit.".len()..];
                     let limit: f64 = value.parse().map_err(|_| anyhow::anyhow!("Invalid TAO amount '{}'", value))?;
+                    validate_spending_limit(limit, netuid)?;
                     let limits = cfg.spending_limits.get_or_insert_with(Default::default);
                     limits.insert(netuid.to_string(), limit);
                 }

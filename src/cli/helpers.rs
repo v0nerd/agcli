@@ -1603,6 +1603,66 @@ pub fn validate_github_repo(repo: &str) -> Result<()> {
     Ok(())
 }
 
+/// Validate a proxy type string against the known on-chain variants.
+/// Returns an error with suggestions if the type is unknown — prevents the
+/// dangerous silent default-to-"Any" (most permissive) on typos.
+pub fn validate_proxy_type(s: &str) -> Result<()> {
+    const KNOWN: &[&str] = &[
+        "any", "owner", "nontransfer", "non_transfer", "staking",
+        "noncritical", "non_critical", "triumvirate", "governance",
+        "senate", "nonfungible", "non_fungible", "registration",
+        "transfer", "smalltransfer", "small_transfer", "rootweights",
+        "root_weights", "childkeys", "child_keys",
+        "sudouncheckedsetcode", "sudo_unchecked_set_code",
+        "swaphotkey", "swap_hotkey",
+        "subnetleasebeneficiary", "subnet_lease_beneficiary",
+        "rootclaim", "root_claim",
+    ];
+    if s.is_empty() {
+        anyhow::bail!("Proxy type cannot be empty. Valid types: Any, Owner, Staking, Transfer, NonTransfer, NonCritical, Governance, Senate, Registration, NonFungible, SmallTransfer, RootWeights, ChildKeys, Triumvirate");
+    }
+    if !KNOWN.contains(&s.to_lowercase().as_str()) {
+        // Build display names (deduplicated, friendly)
+        let display = &[
+            "Any", "Owner", "Staking", "Transfer", "NonTransfer",
+            "NonCritical", "Governance", "Senate", "Registration",
+            "NonFungible", "SmallTransfer", "RootWeights", "ChildKeys",
+            "Triumvirate", "SwapHotkey", "SubnetLeaseBeneficiary", "RootClaim",
+            "SudoUncheckedSetCode",
+        ];
+        anyhow::bail!(
+            "Unknown proxy type '{}'. Valid types: {}",
+            s,
+            display.join(", ")
+        );
+    }
+    Ok(())
+}
+
+/// Validate a spending limit value for config (must be non-negative and finite).
+pub fn validate_spending_limit(value: f64, netuid_str: &str) -> Result<()> {
+    // Validate netuid suffix is a valid u16
+    let _: u16 = netuid_str.parse().map_err(|_| {
+        anyhow::anyhow!(
+            "Invalid netuid '{}' in spending_limit key. Must be a number 0-65535.",
+            netuid_str
+        )
+    })?;
+    if value.is_nan() || value.is_infinite() {
+        anyhow::bail!(
+            "Spending limit must be a finite number, got: {}",
+            value
+        );
+    }
+    if value < 0.0 {
+        anyhow::bail!(
+            "Spending limit cannot be negative, got: {}",
+            value
+        );
+    }
+    Ok(())
+}
+
 /// Parse an optional JSON string into a vec of subxt dynamic Values.
 /// Validates the JSON structure before converting.
 pub fn parse_json_args(args: &Option<String>) -> anyhow::Result<Vec<subxt::dynamic::Value>> {

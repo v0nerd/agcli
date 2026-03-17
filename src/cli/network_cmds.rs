@@ -1086,6 +1086,7 @@ pub(super) async fn handle_proxy(cmd: ProxyCommands, client: &Client, ctx: &Ctx<
             delay,
         } => {
             validate_ss58(&delegate, "delegate")?;
+            validate_proxy_type(&proxy_type)?;
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
             unlock_coldkey(&mut wallet, password)?;
             let verb = if adding { "Adding" } else { "Removing" };
@@ -1120,6 +1121,7 @@ pub(super) async fn handle_proxy(cmd: ProxyCommands, client: &Client, ctx: &Ctx<
             delay,
             index,
         } => {
+            validate_proxy_type(&proxy_type)?;
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
             unlock_coldkey(&mut wallet, password)?;
             println!(
@@ -1140,6 +1142,7 @@ pub(super) async fn handle_proxy(cmd: ProxyCommands, client: &Client, ctx: &Ctx<
             ext_index,
         } => {
             validate_ss58(&spawner, "spawner")?;
+            validate_proxy_type(&proxy_type)?;
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
             unlock_coldkey(&mut wallet, password)?;
             println!(
@@ -1189,6 +1192,7 @@ pub(super) async fn handle_proxy(cmd: ProxyCommands, client: &Client, ctx: &Ctx<
             Ok(())
         }
         ProxyCommands::Announce { real, call_hash } => {
+            validate_ss58(&real, "real")?;
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
             unlock_coldkey(&mut wallet, password)?;
             let hash_hex = call_hash.strip_prefix("0x").unwrap_or(&call_hash);
@@ -1214,6 +1218,13 @@ pub(super) async fn handle_proxy(cmd: ProxyCommands, client: &Client, ctx: &Ctx<
             call,
             args,
         } => {
+            validate_ss58(&delegate, "delegate")?;
+            validate_ss58(&real, "real")?;
+            if let Some(ref pt) = proxy_type {
+                validate_proxy_type(pt)?;
+            }
+            validate_pallet_call(&pallet, "pallet")?;
+            validate_pallet_call(&call, "call")?;
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
             unlock_coldkey(&mut wallet, password)?;
             let fields = parse_json_args(&args)?;
@@ -1242,6 +1253,7 @@ pub(super) async fn handle_proxy(cmd: ProxyCommands, client: &Client, ctx: &Ctx<
             delegate,
             call_hash,
         } => {
+            validate_ss58(&delegate, "delegate")?;
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
             unlock_coldkey(&mut wallet, password)?;
             let hash_hex = call_hash.strip_prefix("0x").unwrap_or(&call_hash);

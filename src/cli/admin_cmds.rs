@@ -242,6 +242,12 @@ fn json_to_value(v: &serde_json::Value) -> Result<Value> {
             if let Some(i) = n.as_u64() {
                 Ok(Value::u128(i as u128))
             } else if let Some(i) = n.as_i64() {
+                if i < 0 {
+                    anyhow::bail!(
+                        "Negative numbers are not allowed in admin call args (got {}). Chain parameters use unsigned integers.",
+                        i
+                    );
+                }
                 Ok(Value::u128(i as u128))
             } else {
                 anyhow::bail!("Unsupported number type: {}", n)
