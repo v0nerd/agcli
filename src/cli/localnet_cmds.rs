@@ -15,6 +15,9 @@ pub(super) async fn handle_localnet(cmd: LocalnetCommands, ctx: &Ctx<'_>) -> Res
             wait,
             timeout,
         } => {
+            if let Some(p) = port {
+                crate::cli::helpers::validate_port(p, "localnet")?;
+            }
             let cfg = LocalnetConfig {
                 image: image.unwrap_or_else(|| localnet::DEFAULT_IMAGE.to_string()),
                 container_name: container
@@ -88,6 +91,9 @@ pub(super) async fn handle_localnet(cmd: LocalnetCommands, ctx: &Ctx<'_>) -> Res
         }
 
         LocalnetCommands::Status { container, port } => {
+            if let Some(p) = port {
+                crate::cli::helpers::validate_port(p, "localnet status")?;
+            }
             let name = container.unwrap_or_else(|| localnet::DEFAULT_CONTAINER.to_string());
             let p = port.unwrap_or(9944);
             let st = localnet::status(&name, p).await?;
@@ -121,6 +127,9 @@ pub(super) async fn handle_localnet(cmd: LocalnetCommands, ctx: &Ctx<'_>) -> Res
             port,
             timeout,
         } => {
+            if let Some(p) = port {
+                crate::cli::helpers::validate_port(p, "localnet reset")?;
+            }
             let cfg = LocalnetConfig {
                 image: image.unwrap_or_else(|| localnet::DEFAULT_IMAGE.to_string()),
                 container_name: container
@@ -182,6 +191,7 @@ pub(super) async fn handle_localnet(cmd: LocalnetCommands, ctx: &Ctx<'_>) -> Res
                 cfg.chain.image = img;
             }
             if let Some(p) = port {
+                crate::cli::helpers::validate_port(p, "scaffold")?;
                 cfg.chain.port = p;
             }
             if no_start {

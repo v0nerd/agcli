@@ -5,10 +5,11 @@ use agcli::cli::helpers::{
     json_to_subxt_value, parse_children, parse_weight_pairs, validate_admin_call_name,
     validate_amount, validate_batch_file, validate_delegate_take, validate_derive_input,
     validate_emission_weights, validate_evm_address, validate_gas_limit,
-    validate_hex_data, validate_ipv4, validate_max_cost, validate_mnemonic,
-    validate_multisig_json_args, validate_name, validate_pallet_call,
-    validate_schedule_id, validate_symbol, validate_take_pct, validate_view_limit,
-    validate_wasm_file, validate_weight_input,
+    validate_github_repo, validate_hex_data, validate_ipv4, validate_max_cost,
+    validate_mnemonic, validate_multisig_json_args, validate_name, validate_pallet_call,
+    validate_schedule_id, validate_subnet_name, validate_symbol, validate_take_pct,
+    validate_threads, validate_url, validate_view_limit, validate_wasm_file,
+    validate_weight_input,
 };
 use agcli::utils::explain;
 
@@ -3544,4 +3545,302 @@ fn parse_weight_pairs_spaces_around_values() {
     let (uids, weights) = parse_weight_pairs(" 0 : 100 , 1 : 200 ").unwrap();
     assert_eq!(uids, vec![0, 1]);
     assert_eq!(weights, vec![100, 200]);
+}
+
+// ── validate_threads ──
+
+#[test]
+fn validate_threads_valid_one() {
+    assert!(validate_threads(1, "POW").is_ok());
+}
+
+#[test]
+fn validate_threads_valid_four() {
+    assert!(validate_threads(4, "POW").is_ok());
+}
+
+#[test]
+fn validate_threads_valid_max() {
+    assert!(validate_threads(256, "POW").is_ok());
+}
+
+#[test]
+fn validate_threads_zero() {
+    let err = validate_threads(0, "POW").unwrap_err();
+    assert!(err.to_string().contains("cannot be zero"), "err: {}", err);
+}
+
+#[test]
+fn validate_threads_too_many() {
+    let err = validate_threads(257, "POW").unwrap_err();
+    assert!(err.to_string().contains("too high"), "err: {}", err);
+    assert!(err.to_string().contains("max 256"), "err: {}", err);
+}
+
+#[test]
+fn validate_threads_way_too_many() {
+    let err = validate_threads(10000, "mining").unwrap_err();
+    assert!(err.to_string().contains("mining"), "label shown: {}", err);
+}
+
+#[test]
+fn validate_threads_boundary_255() {
+    assert!(validate_threads(255, "t").is_ok());
+}
+
+#[test]
+fn validate_threads_label_in_error() {
+    let err = validate_threads(0, "custom-label").unwrap_err();
+    assert!(err.to_string().contains("custom-label"), "label: {}", err);
+}
+
+// ── validate_url ──
+
+#[test]
+fn validate_url_valid_https() {
+    assert!(validate_url("https://example.com", "test").is_ok());
+}
+
+#[test]
+fn validate_url_valid_http() {
+    assert!(validate_url("http://example.com/path?q=1", "test").is_ok());
+}
+
+#[test]
+fn validate_url_valid_localhost() {
+    assert!(validate_url("http://localhost:8080/api", "test").is_ok());
+}
+
+#[test]
+fn validate_url_empty_ok() {
+    assert!(validate_url("", "test").is_ok());
+}
+
+#[test]
+fn validate_url_whitespace_empty_ok() {
+    assert!(validate_url("   ", "test").is_ok());
+}
+
+#[test]
+fn validate_url_missing_scheme() {
+    let err = validate_url("example.com", "subnet URL").unwrap_err();
+    assert!(err.to_string().contains("http://"), "err: {}", err);
+    assert!(err.to_string().contains("https://"), "err: {}", err);
+}
+
+#[test]
+fn validate_url_ftp_scheme_rejected() {
+    let err = validate_url("ftp://files.example.com", "test").unwrap_err();
+    assert!(err.to_string().contains("http://"), "err: {}", err);
+}
+
+#[test]
+fn validate_url_missing_host() {
+    let err = validate_url("https://", "test").unwrap_err();
+    assert!(err.to_string().contains("missing a host"), "err: {}", err);
+}
+
+#[test]
+fn validate_url_missing_host_with_path() {
+    let err = validate_url("https:///path", "test").unwrap_err();
+    assert!(err.to_string().contains("missing a host"), "err: {}", err);
+}
+
+#[test]
+fn validate_url_too_long() {
+    let long_url = format!("https://example.com/{}", "a".repeat(2040));
+    let err = validate_url(&long_url, "test").unwrap_err();
+    assert!(err.to_string().contains("too long"), "err: {}", err);
+    assert!(err.to_string().contains("max 2048"), "err: {}", err);
+}
+
+#[test]
+fn validate_url_label_in_error() {
+    let err = validate_url("badurl", "my-field").unwrap_err();
+    assert!(err.to_string().contains("my-field"), "label: {}", err);
+}
+
+#[test]
+fn validate_url_http_missing_host_query() {
+    let err = validate_url("http://?query", "test").unwrap_err();
+    assert!(err.to_string().contains("missing a host"), "err: {}", err);
+}
+
+#[test]
+fn validate_url_valid_with_port() {
+    assert!(validate_url("https://example.com:443/path", "test").is_ok());
+}
+
+#[test]
+fn validate_url_valid_ip_address() {
+    assert!(validate_url("http://192.168.1.1:9944", "test").is_ok());
+}
+
+// ── validate_subnet_name ──
+
+#[test]
+fn validate_subnet_name_valid_simple() {
+    assert!(validate_subnet_name("MySubnet", "name").is_ok());
+}
+
+#[test]
+fn validate_subnet_name_valid_with_spaces() {
+    assert!(validate_subnet_name("My Cool Subnet", "name").is_ok());
+}
+
+#[test]
+fn validate_subnet_name_valid_single_char() {
+    assert!(validate_subnet_name("A", "name").is_ok());
+}
+
+#[test]
+fn validate_subnet_name_valid_max_length() {
+    let name = "a".repeat(256);
+    assert!(validate_subnet_name(&name, "name").is_ok());
+}
+
+#[test]
+fn validate_subnet_name_empty() {
+    let err = validate_subnet_name("", "subnet name").unwrap_err();
+    assert!(err.to_string().contains("cannot be empty"), "err: {}", err);
+}
+
+#[test]
+fn validate_subnet_name_whitespace_only() {
+    let err = validate_subnet_name("   ", "subnet name").unwrap_err();
+    assert!(err.to_string().contains("cannot be empty"), "err: {}", err);
+}
+
+#[test]
+fn validate_subnet_name_too_long() {
+    let name = "a".repeat(257);
+    let err = validate_subnet_name(&name, "name").unwrap_err();
+    assert!(err.to_string().contains("too long"), "err: {}", err);
+    assert!(err.to_string().contains("max 256"), "err: {}", err);
+}
+
+#[test]
+fn validate_subnet_name_control_chars() {
+    let err = validate_subnet_name("My\x00Subnet", "name").unwrap_err();
+    assert!(err.to_string().contains("control character"), "err: {}", err);
+}
+
+#[test]
+fn validate_subnet_name_newline_rejected() {
+    let err = validate_subnet_name("My\nSubnet", "name").unwrap_err();
+    assert!(err.to_string().contains("control character"), "err: {}", err);
+}
+
+#[test]
+fn validate_subnet_name_tab_rejected() {
+    let err = validate_subnet_name("My\tSubnet", "name").unwrap_err();
+    assert!(err.to_string().contains("control character"), "err: {}", err);
+}
+
+#[test]
+fn validate_subnet_name_unicode_ok() {
+    assert!(validate_subnet_name("Subnet-日本語", "name").is_ok());
+}
+
+#[test]
+fn validate_subnet_name_label_in_error() {
+    let err = validate_subnet_name("", "custom-label").unwrap_err();
+    assert!(err.to_string().contains("custom-label"), "label: {}", err);
+}
+
+#[test]
+fn validate_subnet_name_special_chars_ok() {
+    assert!(validate_subnet_name("My-Subnet_v2.0 (beta)", "name").is_ok());
+}
+
+// ── validate_github_repo ──
+
+#[test]
+fn validate_github_repo_valid() {
+    assert!(validate_github_repo("opentensor/subtensor").is_ok());
+}
+
+#[test]
+fn validate_github_repo_valid_with_dots() {
+    assert!(validate_github_repo("user.name/repo.rs").is_ok());
+}
+
+#[test]
+fn validate_github_repo_valid_with_hyphens() {
+    assert!(validate_github_repo("my-org/my-repo").is_ok());
+}
+
+#[test]
+fn validate_github_repo_valid_with_underscores() {
+    assert!(validate_github_repo("my_org/my_repo").is_ok());
+}
+
+#[test]
+fn validate_github_repo_empty_ok() {
+    assert!(validate_github_repo("").is_ok());
+}
+
+#[test]
+fn validate_github_repo_whitespace_ok() {
+    assert!(validate_github_repo("   ").is_ok());
+}
+
+#[test]
+fn validate_github_repo_missing_slash() {
+    let err = validate_github_repo("justarepo").unwrap_err();
+    assert!(err.to_string().contains("owner/repo"), "err: {}", err);
+}
+
+#[test]
+fn validate_github_repo_empty_owner() {
+    let err = validate_github_repo("/repo").unwrap_err();
+    assert!(err.to_string().contains("owner/repo"), "err: {}", err);
+}
+
+#[test]
+fn validate_github_repo_empty_repo() {
+    let err = validate_github_repo("owner/").unwrap_err();
+    assert!(err.to_string().contains("owner/repo"), "err: {}", err);
+}
+
+#[test]
+fn validate_github_repo_too_many_slashes() {
+    let err = validate_github_repo("a/b/c").unwrap_err();
+    assert!(err.to_string().contains("owner/repo"), "err: {}", err);
+}
+
+#[test]
+fn validate_github_repo_special_chars() {
+    let err = validate_github_repo("user@/repo").unwrap_err();
+    assert!(err.to_string().contains("invalid character"), "err: {}", err);
+}
+
+#[test]
+fn validate_github_repo_spaces_in_name() {
+    let err = validate_github_repo("my org/my repo").unwrap_err();
+    assert!(err.to_string().contains("invalid character"), "err: {}", err);
+}
+
+#[test]
+fn validate_github_repo_too_long() {
+    let long = format!("{}/{}", "a".repeat(128), "b".repeat(128));
+    let err = validate_github_repo(&long).unwrap_err();
+    assert!(err.to_string().contains("too long"), "err: {}", err);
+}
+
+#[test]
+fn validate_github_repo_unicode_rejected() {
+    let err = validate_github_repo("日本/語").unwrap_err();
+    assert!(err.to_string().contains("invalid character"), "err: {}", err);
+}
+
+#[test]
+fn validate_github_repo_hash_character() {
+    let err = validate_github_repo("user/repo#1").unwrap_err();
+    assert!(err.to_string().contains("invalid character"), "err: {}", err);
+}
+
+#[test]
+fn validate_github_repo_single_chars() {
+    assert!(validate_github_repo("a/b").is_ok());
 }

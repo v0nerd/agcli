@@ -85,7 +85,10 @@ pub(super) async fn handle_delegate(
         }
         DelegateCommands::Show { hotkey } => {
             let hotkey_ss58 = match hotkey {
-                Some(hk) => hk,
+                Some(hk) => {
+                    validate_ss58(&hk, "delegate show hotkey")?;
+                    hk
+                }
                 None => {
                     let mut wallet = open_wallet(ctx.wallet_dir, ctx.wallet_name)?;
                     resolve_hotkey_ss58(None, &mut wallet, ctx.hotkey_name)?
@@ -181,6 +184,7 @@ pub(super) async fn handle_identity(
     let (wallet_dir, wallet_name, password) = (ctx.wallet_dir, ctx.wallet_name, ctx.password);
     match cmd {
         IdentityCommands::Show { address } => {
+            validate_ss58(&address, "identity show address")?;
             let identity = client.get_identity(&address).await?;
             match identity {
                 Some(id) => {
@@ -216,6 +220,13 @@ pub(super) async fn handle_identity(
             github,
             url,
         } => {
+            crate::cli::helpers::validate_subnet_name(&name, "subnet name")?;
+            if let Some(ref u) = url {
+                crate::cli::helpers::validate_url(u, "subnet URL")?;
+            }
+            if let Some(ref gh) = github {
+                crate::cli::helpers::validate_github_repo(gh)?;
+            }
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
             unlock_coldkey(&mut wallet, password)?;
             let identity = crate::types::chain_data::SubnetIdentity {
@@ -1033,6 +1044,7 @@ pub(super) async fn handle_serve(cmd: ServeCommands, client: &Client, ctx: &Ctx<
             Ok(())
         }
         ServeCommands::Reset { netuid } => {
+            validate_netuid(netuid)?;
             let (pair, hk) =
                 unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, None, password)?;
             println!(

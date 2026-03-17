@@ -1480,6 +1480,129 @@ pub fn validate_admin_call_name(name: &str) -> Result<()> {
     Ok(())
 }
 
+/// Validate a thread count for CPU-bound operations (e.g. POW mining).
+///
+/// Threads must be >= 1 and <= 256 (sanity cap to prevent resource exhaustion).
+pub fn validate_threads(threads: u32, label: &str) -> Result<()> {
+    if threads == 0 {
+        anyhow::bail!(
+            "{} thread count cannot be zero. Use at least 1 thread.",
+            label
+        );
+    }
+    if threads > 256 {
+        anyhow::bail!(
+            "{} thread count {} is too high (max 256). Using more threads than available cores wastes resources.",
+            label, threads
+        );
+    }
+    Ok(())
+}
+
+/// Validate a URL string (basic format check).
+///
+/// Accepts http:// and https:// URLs with a non-empty host.
+/// Empty strings are allowed (optional fields).
+pub fn validate_url(url: &str, label: &str) -> Result<()> {
+    let trimmed = url.trim();
+    if trimmed.is_empty() {
+        return Ok(()); // Empty is OK for optional fields
+    }
+    if trimmed.len() > 2048 {
+        anyhow::bail!(
+            "{} URL is too long ({} chars, max 2048).",
+            label, trimmed.len()
+        );
+    }
+    if !trimmed.starts_with("http://") && !trimmed.starts_with("https://") {
+        anyhow::bail!(
+            "{} URL must start with http:// or https:// (got '{}').",
+            label,
+            if trimmed.len() > 60 {
+                let preview: String = trimmed.chars().take(60).collect();
+                format!("{}...", preview)
+            } else {
+                trimmed.to_string()
+            }
+        );
+    }
+    // Must have a host after the scheme
+    let after_scheme = if trimmed.starts_with("https://") {
+        &trimmed[8..]
+    } else {
+        &trimmed[7..]
+    };
+    if after_scheme.is_empty() || after_scheme.starts_with('/') || after_scheme.starts_with('?') {
+        anyhow::bail!(
+            "{} URL is missing a host name.",
+            label
+        );
+    }
+    Ok(())
+}
+
+/// Validate a subnet identity name string.
+///
+/// Must be non-empty, max 256 chars, ASCII printable, no control characters.
+pub fn validate_subnet_name(name: &str, label: &str) -> Result<()> {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        anyhow::bail!(
+            "{} cannot be empty.",
+            label
+        );
+    }
+    if trimmed.len() > 256 {
+        let preview: String = trimmed.chars().take(32).collect();
+        anyhow::bail!(
+            "{} '{}...' is too long ({} chars, max 256).",
+            label, preview, trimmed.len()
+        );
+    }
+    if let Some(bad) = trimmed.chars().find(|c| c.is_control()) {
+        anyhow::bail!(
+            "{} contains control character (U+{:04X}). Use only printable characters.",
+            label, bad as u32
+        );
+    }
+    Ok(())
+}
+
+/// Validate a GitHub repo string (owner/repo format).
+///
+/// Empty strings are allowed (optional fields). If non-empty, must match
+/// `owner/repo` format with alphanumeric + hyphens + underscores + dots.
+pub fn validate_github_repo(repo: &str) -> Result<()> {
+    let trimmed = repo.trim();
+    if trimmed.is_empty() {
+        return Ok(()); // Optional
+    }
+    if trimmed.len() > 256 {
+        anyhow::bail!(
+            "GitHub repo '{}' is too long (max 256 chars).",
+            &trimmed[..32]
+        );
+    }
+    // Must contain exactly one '/'
+    let parts: Vec<&str> = trimmed.splitn(3, '/').collect();
+    if parts.len() != 2 || parts[0].is_empty() || parts[1].is_empty() {
+        anyhow::bail!(
+            "GitHub repo '{}' must be in 'owner/repo' format (e.g. 'opentensor/subtensor').",
+            trimmed
+        );
+    }
+    // Both parts: alphanumeric + hyphens + underscores + dots
+    for part in &parts {
+        if let Some(bad) = part.chars().find(|c| !c.is_ascii_alphanumeric() && *c != '-' && *c != '_' && *c != '.') {
+            anyhow::bail!(
+                "GitHub repo '{}' contains invalid character '{}'. Use only letters, numbers, hyphens, underscores, and dots.",
+                trimmed, bad
+            );
+        }
+    }
+    Ok(())
+}
+
 /// Parse an optional JSON string into a vec of subxt dynamic Values.
 /// Validates the JSON structure before converting.
 pub fn parse_json_args(args: &Option<String>) -> anyhow::Result<Vec<subxt::dynamic::Value>> {

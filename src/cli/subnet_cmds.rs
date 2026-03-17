@@ -501,6 +501,7 @@ pub(super) async fn handle_subnet(
             Ok(())
         }
         SubnetCommands::Pow { netuid, threads } => {
+            crate::cli::helpers::validate_threads(threads, "POW")?;
             let (pair, hk) =
                 unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, None, password)?;
             let hotkey_pk = crate::wallet::keypair::from_ss58(&hk)?;
@@ -908,8 +909,7 @@ pub(super) async fn handle_subnet(
             Ok(())
         }
         SubnetCommands::SetEmissionSplit { netuid, weights } => {
-            let mut wallet = open_wallet(wallet_dir, wallet_name)?;
-            unlock_coldkey(&mut wallet, password)?;
+            // Pre-validate the weights string before wallet unlock
             let split: Vec<u16> = weights
                 .split(',')
                 .map(|s| s.trim().parse::<u16>())
@@ -921,6 +921,9 @@ pub(super) async fn handle_subnet(
                     )
                 })?;
             crate::cli::helpers::validate_emission_weights(&split)?;
+            // Now open wallet after validation passes
+            let mut wallet = open_wallet(wallet_dir, wallet_name)?;
+            unlock_coldkey(&mut wallet, password)?;
             let total: u64 = split.iter().map(|v| *v as u64).sum();
             println!(
                 "Setting SN{} emission split: {:?} (total: {})",

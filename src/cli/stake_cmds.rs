@@ -205,6 +205,8 @@ pub async fn handle_stake(cmd: StakeCommands, client: &Client, ctx: &Ctx<'_>) ->
             to_hotkey,
         } => {
             validate_amount(amount, "swap amount")?;
+            validate_ss58(&from_hotkey, "stake swap from-hotkey")?;
+            validate_ss58(&to_hotkey, "stake swap to-hotkey")?;
             if from_hotkey == to_hotkey {
                 anyhow::bail!("Source and destination hotkeys are the same. Use different hotkeys for swap.");
             }

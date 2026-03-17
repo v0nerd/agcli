@@ -80,6 +80,9 @@ pub async fn handle_view(cmd: ViewCommands, client: &Client, ctx: &Ctx<'_>) -> R
             since_block,
             limit,
         } => {
+            if let Some(lim) = limit {
+                validate_view_limit(lim, "metagraph --limit")?;
+            }
             if let Some(interval) = live_interval {
                 return crate::live::live_metagraph(client, NetUid(netuid), interval).await;
             }
@@ -103,6 +106,9 @@ pub async fn handle_view(cmd: ViewCommands, client: &Client, ctx: &Ctx<'_>) -> R
             handle_subnet_health(client, NetUid(netuid), tcp_check, probe_timeout_ms, output).await
         }
         ViewCommands::Emissions { netuid, limit } => {
+            if let Some(lim) = limit {
+                validate_view_limit(lim, "emissions --limit")?;
+            }
             handle_emissions(client, NetUid(netuid), limit, output).await
         }
     }
