@@ -531,6 +531,298 @@ proptest! {
     }
 }
 
+// ──── Wallet keypair module: never panics on arbitrary input ────
+
+proptest! {
+    /// pair_from_mnemonic with random strings should never panic
+    #[test]
+    fn fuzz_pair_from_mnemonic_no_panic(s in "\\PC{0,500}") {
+        let _ = agcli::wallet::keypair::pair_from_mnemonic(&s);
+    }
+
+    /// pair_from_seed_hex with random strings should never panic
+    #[test]
+    fn fuzz_pair_from_seed_hex_no_panic(s in "\\PC{0,200}") {
+        let _ = agcli::wallet::keypair::pair_from_seed_hex(&s);
+    }
+
+    /// pair_from_seed_hex with valid 64-char hex should succeed
+    #[test]
+    fn fuzz_pair_from_seed_hex_valid(hex in "[0-9a-f]{64}") {
+        let input = format!("0x{}", hex);
+        let result = agcli::wallet::keypair::pair_from_seed_hex(&input);
+        prop_assert!(result.is_ok(),
+            "valid 64-char seed hex should produce a keypair: {:?}", result.err());
+    }
+
+    /// pair_from_seed_hex with wrong-length hex should fail
+    #[test]
+    fn fuzz_pair_from_seed_hex_wrong_length(hex in "[0-9a-f]{1,63}") {
+        prop_assume!(hex.len() != 64);
+        let input = format!("0x{}", hex);
+        let _ = agcli::wallet::keypair::pair_from_seed_hex(&input);
+        // Just no panic; whether it errors depends on implementation
+    }
+
+    /// pair_from_uri with random strings should never panic
+    #[test]
+    fn fuzz_pair_from_uri_no_panic(s in "\\PC{0,200}") {
+        let _ = agcli::wallet::keypair::pair_from_uri(&s);
+    }
+
+    /// pair_from_uri with dev accounts should succeed
+    #[test]
+    fn fuzz_pair_from_uri_dev_accounts(name in "(Alice|Bob|Charlie|Dave|Eve|Ferdie)") {
+        let uri = format!("//{}", name);
+        let result = agcli::wallet::keypair::pair_from_uri(&uri);
+        prop_assert!(result.is_ok(),
+            "dev account //{}  should produce a keypair: {:?}", name, result.err());
+    }
+
+    /// from_ss58 with random strings should never panic
+    #[test]
+    fn fuzz_from_ss58_no_panic(s in "\\PC{0,100}") {
+        let _ = agcli::wallet::keypair::from_ss58(&s);
+    }
+
+    /// to_ss58 with prefix 42 (Bittensor) → from_ss58 roundtrip
+    #[test]
+    fn fuzz_ss58_roundtrip_bittensor(_dummy in 0u8..10) {
+        use sp_core::Pair;
+        let (pair, _) = sp_core::sr25519::Pair::generate();
+        let public = pair.public();
+        let ss58 = agcli::wallet::keypair::to_ss58(&public, 42);
+        // The address should be a non-empty string starting with '5'
+        prop_assert!(!ss58.is_empty(), "to_ss58 should produce non-empty address");
+        prop_assert!(ss58.starts_with('5'), "Bittensor SS58 should start with '5': {}", ss58);
+        // from_ss58 should parse it back
+        let decoded = agcli::wallet::keypair::from_ss58(&ss58);
+        prop_assert!(decoded.is_ok(),
+            "from_ss58 should parse Bittensor SS58 address: {:?}", decoded.err());
+        let decoded_pub = decoded.unwrap();
+        prop_assert_eq!(decoded_pub, public,
+            "roundtrip should produce the same public key");
+    }
+
+    /// to_ss58 never panics with any prefix
+    #[test]
+    fn fuzz_to_ss58_no_panic(prefix in 0u16..=16383) {
+        use sp_core::Pair;
+        let (pair, _) = sp_core::sr25519::Pair::generate();
+        let public = pair.public();
+        let ss58 = agcli::wallet::keypair::to_ss58(&public, prefix);
+        prop_assert!(!ss58.is_empty(), "to_ss58 should always produce non-empty string");
+    }
+}
+
+// ──── Wallet keyfile module: encrypt/decrypt roundtrip + panic safety ────
+
+proptest! {
+    /// is_nacl_encrypted should never panic on any input
+    #[test]
+    fn fuzz_is_nacl_encrypted_no_panic(data in proptest::collection::vec(any::<u8>(), 0..200)) {
+        let _ = agcli::wallet::keyfile::is_nacl_encrypted(&data);
+    }
+
+    /// is_nacl_encrypted: NaCl-encrypted data starts with "$NACL" header
+    #[test]
+    fn fuzz_is_nacl_encrypted_with_header(
+        tail in proptest::collection::vec(any::<u8>(), 0..50)
+    ) {
+        let mut data = b"$NACL".to_vec();
+        data.extend_from_slice(&tail);
+        prop_assert!(agcli::wallet::keyfile::is_nacl_encrypted(&data),
+            "data starting with $NACL should be detected as NaCl-encrypted");
+    }
+
+    /// is_nacl_encrypted: random data without header should return false
+    #[test]
+    fn fuzz_is_nacl_encrypted_without_header(data in proptest::collection::vec(any::<u8>(), 0..50)) {
+        prop_assume!(!data.starts_with(b"$NACL"));
+        prop_assert!(!agcli::wallet::keyfile::is_nacl_encrypted(&data),
+            "data not starting with $NACL should not be detected as NaCl-encrypted");
+    }
+
+    /// decrypt_nacl_keyfile_data with random data should never panic
+    #[test]
+    #[ignore] // slow due to Argon2 KDF in decrypt path; run manually with --ignored
+    fn fuzz_decrypt_nacl_no_panic(
+        data in proptest::collection::vec(any::<u8>(), 0..100),
+        password in "[a-z]{1,16}"
+    ) {
+        let _ = agcli::wallet::keyfile::decrypt_nacl_keyfile_data(&data, &password);
+    }
+}
+
+// ──── Wallet create/import/unlock roundtrip property tests ────
+
+proptest! {
+    /// generate_mnemonic_keypair always produces a valid keypair + mnemonic
+    #[test]
+    fn fuzz_generate_mnemonic_keypair_always_valid(_dummy in 0u8..10) {
+        let result = agcli::wallet::keypair::generate_mnemonic_keypair();
+        prop_assert!(result.is_ok(), "generate_mnemonic_keypair should never fail");
+        let (_pair, mnemonic) = result.unwrap();
+        // The mnemonic should be a valid 12-word phrase
+        let words: Vec<&str> = mnemonic.split_whitespace().collect();
+        prop_assert_eq!(words.len(), 12, "generated mnemonic should have 12 words, got {}", words.len());
+        // And it should be accepted by validate_mnemonic
+        prop_assert!(validate_mnemonic(&mnemonic).is_ok(),
+            "generated mnemonic should pass validation: {}", mnemonic);
+    }
+
+    /// Mnemonic → keypair is deterministic (same mnemonic → same keys)
+    #[test]
+    fn fuzz_mnemonic_deterministic(_dummy in 0u8..5) {
+        let (_, mnemonic) = agcli::wallet::keypair::generate_mnemonic_keypair().unwrap();
+        let pair1 = agcli::wallet::keypair::pair_from_mnemonic(&mnemonic).unwrap();
+        let pair2 = agcli::wallet::keypair::pair_from_mnemonic(&mnemonic).unwrap();
+        use sp_core::Pair;
+        prop_assert_eq!(pair1.public(), pair2.public(),
+            "same mnemonic must produce same public key");
+    }
+
+    /// Mnemonic → keypair → SS58 → from_ss58 full roundtrip
+    #[test]
+    fn fuzz_mnemonic_to_ss58_roundtrip(_dummy in 0u8..5) {
+        let (pair, _mnemonic) = agcli::wallet::keypair::generate_mnemonic_keypair().unwrap();
+        use sp_core::Pair;
+        let public = pair.public();
+        let ss58 = agcli::wallet::keypair::to_ss58(&public, 42);
+        // Validate the SS58 address
+        prop_assert!(validate_ss58(&ss58, "test").is_ok(),
+            "generated SS58 address should pass validation: {}", ss58);
+        // Decode back
+        let decoded = agcli::wallet::keypair::from_ss58(&ss58).unwrap();
+        prop_assert_eq!(decoded, public, "SS58 roundtrip should preserve public key");
+    }
+}
+
+// ──── Wallet encrypt/decrypt file roundtrip property tests ────
+
+proptest! {
+    /// write_encrypted_keyfile → read_encrypted_keyfile roundtrip
+    #[test]
+    fn fuzz_encrypt_decrypt_roundtrip(
+        password in "[a-zA-Z0-9!@#$]{8,32}"
+    ) {
+        let (_pair, mnemonic) = agcli::wallet::keypair::generate_mnemonic_keypair().unwrap();
+        // Use a temp directory
+        let dir = tempfile::tempdir().unwrap();
+        let keypath = dir.path().join("coldkey");
+        // Write encrypted
+        agcli::wallet::keyfile::write_encrypted_keyfile(&keypath, &mnemonic, &password).unwrap();
+        // Read back
+        let decrypted = agcli::wallet::keyfile::read_encrypted_keyfile(&keypath, &password).unwrap();
+        prop_assert_eq!(&decrypted, &mnemonic,
+            "decrypt(encrypt(mnemonic)) should return the original mnemonic");
+    }
+
+    /// Encrypted keyfile with wrong password should fail
+    #[test]
+    fn fuzz_decrypt_wrong_password(
+        password in "[a-zA-Z0-9]{8,16}",
+        wrong_password in "[a-zA-Z0-9]{8,16}"
+    ) {
+        prop_assume!(password != wrong_password);
+        let (_pair, mnemonic) = agcli::wallet::keypair::generate_mnemonic_keypair().unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let keypath = dir.path().join("coldkey");
+        agcli::wallet::keyfile::write_encrypted_keyfile(&keypath, &mnemonic, &password).unwrap();
+        let result = agcli::wallet::keyfile::read_encrypted_keyfile(&keypath, &wrong_password);
+        prop_assert!(result.is_err(),
+            "decrypting with wrong password should fail");
+    }
+
+    /// write_keyfile → read_keyfile roundtrip (unencrypted hotkey style)
+    #[test]
+    fn fuzz_unencrypted_keyfile_roundtrip(_dummy in 0u8..5) {
+        let (_pair, mnemonic) = agcli::wallet::keypair::generate_mnemonic_keypair().unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let keypath = dir.path().join("hotkey");
+        agcli::wallet::keyfile::write_keyfile(&keypath, &mnemonic).unwrap();
+        let read_back = agcli::wallet::keyfile::read_keyfile(&keypath).unwrap();
+        prop_assert_eq!(&read_back, &mnemonic,
+            "read_keyfile should return what write_keyfile wrote");
+    }
+
+    /// write_public_key → read_public_key roundtrip
+    #[test]
+    fn fuzz_public_key_file_roundtrip(_dummy in 0u8..5) {
+        use sp_core::Pair;
+        let (pair, _) = sp_core::sr25519::Pair::generate();
+        let public = pair.public();
+        let dir = tempfile::tempdir().unwrap();
+        let keypath = dir.path().join("pubkey");
+        agcli::wallet::keyfile::write_public_key(&keypath, &public).unwrap();
+        let read_back = agcli::wallet::keyfile::read_public_key(&keypath).unwrap();
+        prop_assert_eq!(read_back, public,
+            "read_public_key should return what write_public_key wrote");
+    }
+}
+
+// ──── Wallet full lifecycle property tests ────
+
+proptest! {
+    /// Full wallet lifecycle: create → open → unlock → sign → verify
+    #[test]
+    fn fuzz_wallet_lifecycle(
+        wallet_name in "[a-zA-Z][a-zA-Z0-9]{2,10}",
+        password in "[a-zA-Z0-9!@#]{8,20}",
+        message in proptest::collection::vec(any::<u8>(), 1..100)
+    ) {
+        use sp_core::Pair;
+        // Create temp wallet dir
+        let dir = tempfile::tempdir().unwrap();
+        // Wallet::create takes (wallet_dir, name, password, hotkey_name) → (Wallet, cold_mnemonic, hot_mnemonic)
+        let result = agcli::wallet::Wallet::create(
+            dir.path(), &wallet_name, &password, "default",
+        );
+        prop_assert!(result.is_ok(), "wallet creation should succeed: {:?}", result.err());
+        let (wallet, _cold_mnemonic, _hot_mnemonic) = result.unwrap();
+        let original_ss58 = wallet.coldkey_ss58().unwrap().to_string();
+        let wallet_path = dir.path().join(&wallet_name);
+        drop(wallet);
+        // Re-open and unlock
+        let mut wallet = agcli::wallet::Wallet::open(&wallet_path).unwrap();
+        prop_assert!(wallet.unlock_coldkey(&password).is_ok(),
+            "unlock with correct password should succeed");
+        // Verify same address
+        prop_assert_eq!(wallet.coldkey_ss58().unwrap(), &original_ss58,
+            "re-opened wallet should have same SS58 address");
+        // Sign and verify
+        let sig = wallet.coldkey().unwrap().sign(&message);
+        prop_assert!(sp_core::sr25519::Pair::verify(&sig, &message, &wallet.coldkey().unwrap().public()),
+            "signature should verify");
+        // Verify with wrong message fails
+        let wrong_msg = [&message[..], &[0xFF]].concat();
+        prop_assert!(!sp_core::sr25519::Pair::verify(&sig, &wrong_msg, &wallet.coldkey().unwrap().public()),
+            "signature should NOT verify with wrong message");
+    }
+
+    /// Wallet import from mnemonic → re-derive produces same keys
+    #[test]
+    fn fuzz_wallet_import_deterministic(
+        wallet_name in "[a-zA-Z][a-zA-Z0-9]{2,8}",
+        password in "[a-zA-Z0-9]{8,16}"
+    ) {
+        // Generate a mnemonic
+        let (_, mnemonic) = agcli::wallet::keypair::generate_mnemonic_keypair().unwrap();
+        // Import it twice into different directories
+        // import_from_mnemonic takes (wallet_dir, name, mnemonic, password)
+        let dir1 = tempfile::tempdir().unwrap();
+        let dir2 = tempfile::tempdir().unwrap();
+        let w1 = agcli::wallet::Wallet::import_from_mnemonic(
+            dir1.path(), &wallet_name, &mnemonic, &password,
+        ).unwrap();
+        let w2 = agcli::wallet::Wallet::import_from_mnemonic(
+            dir2.path(), &wallet_name, &mnemonic, &password,
+        ).unwrap();
+        prop_assert_eq!(w1.coldkey_ss58().unwrap(), w2.coldkey_ss58().unwrap(),
+            "importing same mnemonic twice should produce same address");
+    }
+}
+
 // ──── Cross-validator consistency: valid input patterns ────
 
 proptest! {

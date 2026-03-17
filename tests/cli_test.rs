@@ -6388,3 +6388,1040 @@ fn parse_proxy_kill_pure_full_args() {
     ]);
     assert!(cli.is_ok(), "proxy kill-pure with all required args should parse");
 }
+
+// =====================================================================
+// Admin commands
+// =====================================================================
+
+#[test]
+fn parse_admin_set_tempo() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "set-tempo",
+        "--netuid", "1",
+        "--tempo", "360",
+    ]);
+    assert!(cli.is_ok(), "admin set-tempo: {:?}", cli.err());
+}
+
+#[test]
+fn parse_admin_set_tempo_with_sudo_key() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "set-tempo",
+        "--netuid", "1",
+        "--tempo", "100",
+        "--sudo-key", "//Alice",
+    ]);
+    assert!(cli.is_ok(), "admin set-tempo with sudo-key: {:?}", cli.err());
+}
+
+#[test]
+fn parse_admin_set_tempo_missing_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "set-tempo",
+        "--tempo", "360",
+    ]);
+    assert!(cli.is_err(), "admin set-tempo without --netuid should fail");
+}
+
+#[test]
+fn parse_admin_set_tempo_missing_tempo() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "set-tempo",
+        "--netuid", "1",
+    ]);
+    assert!(cli.is_err(), "admin set-tempo without --tempo should fail");
+}
+
+#[test]
+fn parse_admin_set_max_validators() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "set-max-validators",
+        "--netuid", "1",
+        "--max", "256",
+    ]);
+    assert!(cli.is_ok(), "admin set-max-validators: {:?}", cli.err());
+}
+
+#[test]
+fn parse_admin_set_max_validators_with_sudo() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "set-max-validators",
+        "--netuid", "3",
+        "--max", "64",
+        "--sudo-key", "//Bob",
+    ]);
+    assert!(cli.is_ok(), "admin set-max-validators with sudo: {:?}", cli.err());
+}
+
+#[test]
+fn parse_admin_set_max_validators_missing_max() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "set-max-validators",
+        "--netuid", "1",
+    ]);
+    assert!(cli.is_err(), "admin set-max-validators without --max should fail");
+}
+
+#[test]
+fn parse_admin_set_max_uids() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "set-max-uids",
+        "--netuid", "1",
+        "--max", "4096",
+    ]);
+    assert!(cli.is_ok(), "admin set-max-uids: {:?}", cli.err());
+}
+
+#[test]
+fn parse_admin_set_max_uids_with_sudo() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "set-max-uids",
+        "--netuid", "2",
+        "--max", "1024",
+        "--sudo-key", "//Alice",
+    ]);
+    assert!(cli.is_ok(), "admin set-max-uids with sudo: {:?}", cli.err());
+}
+
+#[test]
+fn parse_admin_set_immunity_period() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "set-immunity-period",
+        "--netuid", "1",
+        "--period", "7200",
+    ]);
+    assert!(cli.is_ok(), "admin set-immunity-period: {:?}", cli.err());
+}
+
+#[test]
+fn parse_admin_set_immunity_period_zero() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "set-immunity-period",
+        "--netuid", "1",
+        "--period", "0",
+    ]);
+    assert!(cli.is_ok(), "admin set-immunity-period zero: {:?}", cli.err());
+}
+
+#[test]
+fn parse_admin_set_min_weights() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "set-min-weights",
+        "--netuid", "1",
+        "--min", "10",
+    ]);
+    assert!(cli.is_ok(), "admin set-min-weights: {:?}", cli.err());
+}
+
+#[test]
+fn parse_admin_set_min_weights_with_sudo() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "set-min-weights",
+        "--netuid", "1",
+        "--min", "0",
+        "--sudo-key", "//Alice",
+    ]);
+    assert!(cli.is_ok(), "admin set-min-weights with sudo: {:?}", cli.err());
+}
+
+#[test]
+fn parse_admin_set_max_weight_limit() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "set-max-weight-limit",
+        "--netuid", "1",
+        "--limit", "65535",
+    ]);
+    assert!(cli.is_ok(), "admin set-max-weight-limit: {:?}", cli.err());
+}
+
+#[test]
+fn parse_admin_set_max_weight_limit_missing_limit() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "set-max-weight-limit",
+        "--netuid", "1",
+    ]);
+    assert!(cli.is_err(), "admin set-max-weight-limit without --limit should fail");
+}
+
+#[test]
+fn parse_admin_set_weights_rate_limit() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "set-weights-rate-limit",
+        "--netuid", "1",
+        "--limit", "100",
+    ]);
+    assert!(cli.is_ok(), "admin set-weights-rate-limit: {:?}", cli.err());
+}
+
+#[test]
+fn parse_admin_set_weights_rate_limit_unlimited() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "set-weights-rate-limit",
+        "--netuid", "1",
+        "--limit", "0",
+    ]);
+    assert!(cli.is_ok(), "admin set-weights-rate-limit unlimited (0): {:?}", cli.err());
+}
+
+#[test]
+fn parse_admin_set_commit_reveal_enable() {
+    // --enabled is a bool flag: present = true, absent = false
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "set-commit-reveal",
+        "--netuid", "1",
+        "--enabled",
+    ]);
+    assert!(cli.is_ok(), "admin set-commit-reveal enable: {:?}", cli.err());
+}
+
+#[test]
+fn parse_admin_set_commit_reveal_disable() {
+    // Omitting --enabled means enabled = false
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "set-commit-reveal",
+        "--netuid", "1",
+    ]);
+    assert!(cli.is_ok(), "admin set-commit-reveal disable: {:?}", cli.err());
+}
+
+#[test]
+fn parse_admin_set_commit_reveal_with_sudo() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "set-commit-reveal",
+        "--netuid", "1",
+        "--enabled",
+        "--sudo-key", "//Alice",
+    ]);
+    assert!(cli.is_ok(), "admin set-commit-reveal with sudo: {:?}", cli.err());
+}
+
+#[test]
+fn parse_admin_set_difficulty() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "set-difficulty",
+        "--netuid", "1",
+        "--difficulty", "1000000",
+    ]);
+    assert!(cli.is_ok(), "admin set-difficulty: {:?}", cli.err());
+}
+
+#[test]
+fn parse_admin_set_difficulty_with_sudo() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "set-difficulty",
+        "--netuid", "1",
+        "--difficulty", "999999999",
+        "--sudo-key", "//Alice",
+    ]);
+    assert!(cli.is_ok(), "admin set-difficulty with sudo: {:?}", cli.err());
+}
+
+#[test]
+fn parse_admin_set_activity_cutoff() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "set-activity-cutoff",
+        "--netuid", "1",
+        "--cutoff", "5000",
+    ]);
+    assert!(cli.is_ok(), "admin set-activity-cutoff: {:?}", cli.err());
+}
+
+#[test]
+fn parse_admin_set_activity_cutoff_missing_cutoff() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "set-activity-cutoff",
+        "--netuid", "1",
+    ]);
+    assert!(cli.is_err(), "admin set-activity-cutoff without --cutoff should fail");
+}
+
+#[test]
+fn parse_admin_raw() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "raw",
+        "--call", "sudo_set_tempo",
+        "--args", "[1, 100]",
+    ]);
+    assert!(cli.is_ok(), "admin raw: {:?}", cli.err());
+}
+
+#[test]
+fn parse_admin_raw_with_sudo_key() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "raw",
+        "--call", "sudo_set_max_allowed_validators",
+        "--args", "[1, 256]",
+        "--sudo-key", "//Alice",
+    ]);
+    assert!(cli.is_ok(), "admin raw with sudo-key: {:?}", cli.err());
+}
+
+#[test]
+fn parse_admin_raw_missing_call() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "raw",
+        "--args", "[1, 100]",
+    ]);
+    assert!(cli.is_err(), "admin raw without --call should fail");
+}
+
+#[test]
+fn parse_admin_raw_missing_args() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "raw",
+        "--call", "sudo_set_tempo",
+    ]);
+    assert!(cli.is_err(), "admin raw without --args should fail");
+}
+
+#[test]
+fn parse_admin_list() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "list",
+    ]);
+    assert!(cli.is_ok(), "admin list: {:?}", cli.err());
+}
+
+// =====================================================================
+// Scheduler commands
+// =====================================================================
+
+#[test]
+fn parse_scheduler_schedule_basic() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "scheduler", "schedule",
+        "--when", "1000",
+        "--pallet", "Balances",
+        "--call", "transfer_allow_death",
+    ]);
+    assert!(cli.is_ok(), "scheduler schedule basic: {:?}", cli.err());
+}
+
+#[test]
+fn parse_scheduler_schedule_with_args() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "scheduler", "schedule",
+        "--when", "500",
+        "--pallet", "SubtensorModule",
+        "--call", "add_stake",
+        "--args", "[1, \"5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\", 1000000000]",
+    ]);
+    assert!(cli.is_ok(), "scheduler schedule with args: {:?}", cli.err());
+}
+
+#[test]
+fn parse_scheduler_schedule_with_priority() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "scheduler", "schedule",
+        "--when", "2000",
+        "--pallet", "Balances",
+        "--call", "transfer_allow_death",
+        "--priority", "0",
+    ]);
+    assert!(cli.is_ok(), "scheduler schedule with priority: {:?}", cli.err());
+}
+
+#[test]
+fn parse_scheduler_schedule_with_repeat() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "scheduler", "schedule",
+        "--when", "100",
+        "--pallet", "System",
+        "--call", "remark",
+        "--repeat-every", "50",
+        "--repeat-count", "10",
+    ]);
+    assert!(cli.is_ok(), "scheduler schedule with repeat: {:?}", cli.err());
+}
+
+#[test]
+fn parse_scheduler_schedule_full_args() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "scheduler", "schedule",
+        "--when", "3000",
+        "--pallet", "SubtensorModule",
+        "--call", "set_weights",
+        "--args", "[1, [0,1], [100,200], 0]",
+        "--priority", "255",
+        "--repeat-every", "100",
+        "--repeat-count", "5",
+    ]);
+    assert!(cli.is_ok(), "scheduler schedule full args: {:?}", cli.err());
+}
+
+#[test]
+fn parse_scheduler_schedule_missing_when() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "scheduler", "schedule",
+        "--pallet", "Balances",
+        "--call", "transfer_allow_death",
+    ]);
+    assert!(cli.is_err(), "scheduler schedule without --when should fail");
+}
+
+#[test]
+fn parse_scheduler_schedule_missing_pallet() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "scheduler", "schedule",
+        "--when", "100",
+        "--call", "transfer_allow_death",
+    ]);
+    assert!(cli.is_err(), "scheduler schedule without --pallet should fail");
+}
+
+#[test]
+fn parse_scheduler_schedule_missing_call() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "scheduler", "schedule",
+        "--when", "100",
+        "--pallet", "Balances",
+    ]);
+    assert!(cli.is_err(), "scheduler schedule without --call should fail");
+}
+
+#[test]
+fn parse_scheduler_schedule_named_basic() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "scheduler", "schedule-named",
+        "--id", "my_task_1",
+        "--when", "5000",
+        "--pallet", "Balances",
+        "--call", "transfer_allow_death",
+    ]);
+    assert!(cli.is_ok(), "scheduler schedule-named: {:?}", cli.err());
+}
+
+#[test]
+fn parse_scheduler_schedule_named_full() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "scheduler", "schedule-named",
+        "--id", "recurring_stake",
+        "--when", "1000",
+        "--pallet", "SubtensorModule",
+        "--call", "add_stake",
+        "--args", "[1, \"5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\", 500000000]",
+        "--priority", "64",
+        "--repeat-every", "200",
+        "--repeat-count", "100",
+    ]);
+    assert!(cli.is_ok(), "scheduler schedule-named full: {:?}", cli.err());
+}
+
+#[test]
+fn parse_scheduler_schedule_named_missing_id() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "scheduler", "schedule-named",
+        "--when", "5000",
+        "--pallet", "Balances",
+        "--call", "transfer_allow_death",
+    ]);
+    assert!(cli.is_err(), "scheduler schedule-named without --id should fail");
+}
+
+#[test]
+fn parse_scheduler_cancel() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "scheduler", "cancel",
+        "--when", "1000",
+        "--index", "0",
+    ]);
+    assert!(cli.is_ok(), "scheduler cancel: {:?}", cli.err());
+}
+
+#[test]
+fn parse_scheduler_cancel_missing_when() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "scheduler", "cancel",
+        "--index", "0",
+    ]);
+    assert!(cli.is_err(), "scheduler cancel without --when should fail");
+}
+
+#[test]
+fn parse_scheduler_cancel_missing_index() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "scheduler", "cancel",
+        "--when", "1000",
+    ]);
+    assert!(cli.is_err(), "scheduler cancel without --index should fail");
+}
+
+#[test]
+fn parse_scheduler_cancel_named() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "scheduler", "cancel-named",
+        "--id", "my_task_1",
+    ]);
+    assert!(cli.is_ok(), "scheduler cancel-named: {:?}", cli.err());
+}
+
+#[test]
+fn parse_scheduler_cancel_named_missing_id() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "scheduler", "cancel-named",
+    ]);
+    assert!(cli.is_err(), "scheduler cancel-named without --id should fail");
+}
+
+// =====================================================================
+// Preimage commands
+// =====================================================================
+
+#[test]
+fn parse_preimage_note_basic() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "preimage", "note",
+        "--pallet", "SubtensorModule",
+        "--call", "set_weights",
+    ]);
+    assert!(cli.is_ok(), "preimage note basic: {:?}", cli.err());
+}
+
+#[test]
+fn parse_preimage_note_with_args() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "preimage", "note",
+        "--pallet", "Balances",
+        "--call", "transfer_allow_death",
+        "--args", "[\"5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\", 1000000000]",
+    ]);
+    assert!(cli.is_ok(), "preimage note with args: {:?}", cli.err());
+}
+
+#[test]
+fn parse_preimage_note_missing_pallet() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "preimage", "note",
+        "--call", "set_weights",
+    ]);
+    assert!(cli.is_err(), "preimage note without --pallet should fail");
+}
+
+#[test]
+fn parse_preimage_note_missing_call() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "preimage", "note",
+        "--pallet", "SubtensorModule",
+    ]);
+    assert!(cli.is_err(), "preimage note without --call should fail");
+}
+
+#[test]
+fn parse_preimage_unnote() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "preimage", "unnote",
+        "--hash", "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+    ]);
+    assert!(cli.is_ok(), "preimage unnote: {:?}", cli.err());
+}
+
+#[test]
+fn parse_preimage_unnote_missing_hash() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "preimage", "unnote",
+    ]);
+    assert!(cli.is_err(), "preimage unnote without --hash should fail");
+}
+
+// =====================================================================
+// Contracts commands
+// =====================================================================
+
+#[test]
+fn parse_contracts_upload_basic() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "contracts", "upload",
+        "--code", "/path/to/contract.wasm",
+    ]);
+    assert!(cli.is_ok(), "contracts upload basic: {:?}", cli.err());
+}
+
+#[test]
+fn parse_contracts_upload_with_deposit() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "contracts", "upload",
+        "--code", "/path/to/contract.wasm",
+        "--storage-deposit-limit", "1000000000",
+    ]);
+    assert!(cli.is_ok(), "contracts upload with deposit: {:?}", cli.err());
+}
+
+#[test]
+fn parse_contracts_upload_missing_code() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "contracts", "upload",
+    ]);
+    assert!(cli.is_err(), "contracts upload without --code should fail");
+}
+
+#[test]
+fn parse_contracts_instantiate_minimal() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "contracts", "instantiate",
+        "--code-hash", "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+    ]);
+    assert!(cli.is_ok(), "contracts instantiate minimal: {:?}", cli.err());
+}
+
+#[test]
+fn parse_contracts_instantiate_full() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "contracts", "instantiate",
+        "--code-hash", "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+        "--value", "1000000",
+        "--data", "0xdeadbeef",
+        "--salt", "0x01020304",
+        "--gas-ref-time", "50000000000",
+        "--gas-proof-size", "2097152",
+        "--storage-deposit-limit", "500000000",
+    ]);
+    assert!(cli.is_ok(), "contracts instantiate full: {:?}", cli.err());
+}
+
+#[test]
+fn parse_contracts_instantiate_missing_code_hash() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "contracts", "instantiate",
+    ]);
+    assert!(cli.is_err(), "contracts instantiate without --code-hash should fail");
+}
+
+#[test]
+fn parse_contracts_call_basic() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "contracts", "call",
+        "--contract", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        "--data", "0xdeadbeef",
+    ]);
+    assert!(cli.is_ok(), "contracts call basic: {:?}", cli.err());
+}
+
+#[test]
+fn parse_contracts_call_full() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "contracts", "call",
+        "--contract", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        "--data", "0x12345678",
+        "--value", "500000",
+        "--gas-ref-time", "20000000000",
+        "--gas-proof-size", "524288",
+        "--storage-deposit-limit", "100000000",
+    ]);
+    assert!(cli.is_ok(), "contracts call full: {:?}", cli.err());
+}
+
+#[test]
+fn parse_contracts_call_missing_contract() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "contracts", "call",
+        "--data", "0xdeadbeef",
+    ]);
+    assert!(cli.is_err(), "contracts call without --contract should fail");
+}
+
+#[test]
+fn parse_contracts_call_missing_data() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "contracts", "call",
+        "--contract", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(cli.is_err(), "contracts call without --data should fail");
+}
+
+#[test]
+fn parse_contracts_remove_code() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "contracts", "remove-code",
+        "--code-hash", "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+    ]);
+    assert!(cli.is_ok(), "contracts remove-code: {:?}", cli.err());
+}
+
+#[test]
+fn parse_contracts_remove_code_missing_hash() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "contracts", "remove-code",
+    ]);
+    assert!(cli.is_err(), "contracts remove-code without --code-hash should fail");
+}
+
+// =====================================================================
+// EVM commands
+// =====================================================================
+
+#[test]
+fn parse_evm_call_minimal() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "evm", "call",
+        "--source", "0x1234567890abcdef1234567890abcdef12345678",
+        "--target", "0xabcdef1234567890abcdef1234567890abcdef12",
+    ]);
+    assert!(cli.is_ok(), "evm call minimal: {:?}", cli.err());
+}
+
+#[test]
+fn parse_evm_call_full() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "evm", "call",
+        "--source", "0x1234567890abcdef1234567890abcdef12345678",
+        "--target", "0xabcdef1234567890abcdef1234567890abcdef12",
+        "--input", "0xa9059cbb000000000000000000000000",
+        "--value", "0x0000000000000000000000000000000000000000000000000000000000000064",
+        "--gas-limit", "100000",
+        "--max-fee-per-gas", "0x0000000000000000000000000000000000000000000000000000000000000010",
+    ]);
+    assert!(cli.is_ok(), "evm call full: {:?}", cli.err());
+}
+
+#[test]
+fn parse_evm_call_missing_source() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "evm", "call",
+        "--target", "0xabcdef1234567890abcdef1234567890abcdef12",
+    ]);
+    assert!(cli.is_err(), "evm call without --source should fail");
+}
+
+#[test]
+fn parse_evm_call_missing_target() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "evm", "call",
+        "--source", "0x1234567890abcdef1234567890abcdef12345678",
+    ]);
+    assert!(cli.is_err(), "evm call without --target should fail");
+}
+
+#[test]
+fn parse_evm_call_custom_gas_limit() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "evm", "call",
+        "--source", "0x0000000000000000000000000000000000000001",
+        "--target", "0x0000000000000000000000000000000000000002",
+        "--gas-limit", "500000",
+    ]);
+    assert!(cli.is_ok(), "evm call custom gas limit: {:?}", cli.err());
+}
+
+#[test]
+fn parse_evm_withdraw() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "evm", "withdraw",
+        "--address", "0x1234567890abcdef1234567890abcdef12345678",
+        "--amount", "1000000000",
+    ]);
+    assert!(cli.is_ok(), "evm withdraw: {:?}", cli.err());
+}
+
+#[test]
+fn parse_evm_withdraw_missing_address() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "evm", "withdraw",
+        "--amount", "1000000000",
+    ]);
+    assert!(cli.is_err(), "evm withdraw without --address should fail");
+}
+
+#[test]
+fn parse_evm_withdraw_missing_amount() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "evm", "withdraw",
+        "--address", "0x1234567890abcdef1234567890abcdef12345678",
+    ]);
+    assert!(cli.is_err(), "evm withdraw without --amount should fail");
+}
+
+#[test]
+fn parse_evm_withdraw_large_amount() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "evm", "withdraw",
+        "--address", "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "--amount", "340282366920938463463374607431768211455",
+    ]);
+    assert!(cli.is_ok(), "evm withdraw u128::MAX: {:?}", cli.err());
+}
+
+// =====================================================================
+// SafeMode commands
+// =====================================================================
+
+#[test]
+fn parse_safe_mode_enter() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "safe-mode", "enter",
+    ]);
+    assert!(cli.is_ok(), "safe-mode enter: {:?}", cli.err());
+}
+
+#[test]
+fn parse_safe_mode_extend() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "safe-mode", "extend",
+    ]);
+    assert!(cli.is_ok(), "safe-mode extend: {:?}", cli.err());
+}
+
+#[test]
+fn parse_safe_mode_force_enter() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "safe-mode", "force-enter",
+        "--duration", "100",
+    ]);
+    assert!(cli.is_ok(), "safe-mode force-enter: {:?}", cli.err());
+}
+
+#[test]
+fn parse_safe_mode_force_enter_missing_duration() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "safe-mode", "force-enter",
+    ]);
+    assert!(cli.is_err(), "safe-mode force-enter without --duration should fail");
+}
+
+#[test]
+fn parse_safe_mode_force_enter_large_duration() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "safe-mode", "force-enter",
+        "--duration", "4294967295",
+    ]);
+    assert!(cli.is_ok(), "safe-mode force-enter max u32: {:?}", cli.err());
+}
+
+#[test]
+fn parse_safe_mode_force_exit() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "safe-mode", "force-exit",
+    ]);
+    assert!(cli.is_ok(), "safe-mode force-exit: {:?}", cli.err());
+}
+
+// =====================================================================
+// Drand commands
+// =====================================================================
+
+#[test]
+fn parse_drand_write_pulse() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "drand", "write-pulse",
+        "--payload", "0xdeadbeef",
+        "--signature", "0xcafebabe",
+    ]);
+    assert!(cli.is_ok(), "drand write-pulse: {:?}", cli.err());
+}
+
+#[test]
+fn parse_drand_write_pulse_missing_payload() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "drand", "write-pulse",
+        "--signature", "0xcafebabe",
+    ]);
+    assert!(cli.is_err(), "drand write-pulse without --payload should fail");
+}
+
+#[test]
+fn parse_drand_write_pulse_missing_signature() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "drand", "write-pulse",
+        "--payload", "0xdeadbeef",
+    ]);
+    assert!(cli.is_err(), "drand write-pulse without --signature should fail");
+}
+
+// =====================================================================
+// Admin commands — boundary value tests
+// =====================================================================
+
+#[test]
+fn parse_admin_set_tempo_max_u16() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "set-tempo",
+        "--netuid", "65535",
+        "--tempo", "65535",
+    ]);
+    assert!(cli.is_ok(), "admin set-tempo max u16: {:?}", cli.err());
+}
+
+#[test]
+fn parse_admin_set_tempo_overflow_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "set-tempo",
+        "--netuid", "65536",
+        "--tempo", "360",
+    ]);
+    assert!(cli.is_err(), "admin set-tempo netuid > u16::MAX should fail");
+}
+
+#[test]
+fn parse_admin_set_tempo_negative_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "set-tempo",
+        "--netuid", "-1",
+        "--tempo", "360",
+    ]);
+    assert!(cli.is_err(), "admin set-tempo negative netuid should fail");
+}
+
+#[test]
+fn parse_admin_set_max_validators_zero() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "set-max-validators",
+        "--netuid", "1",
+        "--max", "0",
+    ]);
+    assert!(cli.is_ok(), "admin set-max-validators zero: {:?}", cli.err());
+}
+
+#[test]
+fn parse_admin_set_weights_rate_limit_max_u64() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "set-weights-rate-limit",
+        "--netuid", "1",
+        "--limit", "18446744073709551615",
+    ]);
+    assert!(cli.is_ok(), "admin set-weights-rate-limit max u64: {:?}", cli.err());
+}
+
+#[test]
+fn parse_admin_set_weights_rate_limit_overflow() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "set-weights-rate-limit",
+        "--netuid", "1",
+        "--limit", "18446744073709551616",
+    ]);
+    assert!(cli.is_err(), "admin set-weights-rate-limit > u64::MAX should fail");
+}
+
+#[test]
+fn parse_admin_set_difficulty_zero() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "set-difficulty",
+        "--netuid", "1",
+        "--difficulty", "0",
+    ]);
+    assert!(cli.is_ok(), "admin set-difficulty zero: {:?}", cli.err());
+}
+
+// =====================================================================
+// Scheduler — boundary / edge-case tests
+// =====================================================================
+
+#[test]
+fn parse_scheduler_schedule_priority_min() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "scheduler", "schedule",
+        "--when", "100",
+        "--pallet", "System",
+        "--call", "remark",
+        "--priority", "0",
+    ]);
+    assert!(cli.is_ok(), "scheduler priority 0 (highest): {:?}", cli.err());
+}
+
+#[test]
+fn parse_scheduler_schedule_priority_max() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "scheduler", "schedule",
+        "--when", "100",
+        "--pallet", "System",
+        "--call", "remark",
+        "--priority", "255",
+    ]);
+    assert!(cli.is_ok(), "scheduler priority 255 (lowest): {:?}", cli.err());
+}
+
+#[test]
+fn parse_scheduler_schedule_priority_overflow() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "scheduler", "schedule",
+        "--when", "100",
+        "--pallet", "System",
+        "--call", "remark",
+        "--priority", "256",
+    ]);
+    assert!(cli.is_err(), "scheduler priority > 255 should fail");
+}
+
+#[test]
+fn parse_scheduler_schedule_when_zero() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "scheduler", "schedule",
+        "--when", "0",
+        "--pallet", "System",
+        "--call", "remark",
+    ]);
+    assert!(cli.is_ok(), "scheduler when=0: {:?}", cli.err());
+}
+
+#[test]
+fn parse_scheduler_cancel_large_index() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "scheduler", "cancel",
+        "--when", "999999",
+        "--index", "4294967295",
+    ]);
+    assert!(cli.is_ok(), "scheduler cancel max u32 index: {:?}", cli.err());
+}
+
+#[test]
+fn parse_scheduler_schedule_named_empty_id() {
+    // Clap will accept an empty string for --id; runtime should validate
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "scheduler", "schedule-named",
+        "--id", "",
+        "--when", "100",
+        "--pallet", "System",
+        "--call", "remark",
+    ]);
+    assert!(cli.is_ok(), "scheduler schedule-named empty id (parses, runtime validates): {:?}", cli.err());
+}
+
+// =====================================================================
+// Contracts — boundary tests
+// =====================================================================
+
+#[test]
+fn parse_contracts_instantiate_defaults_only() {
+    // Just code-hash; value, data, salt, gas all have defaults
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "contracts", "instantiate",
+        "--code-hash", "0x0000000000000000000000000000000000000000000000000000000000000001",
+    ]);
+    assert!(cli.is_ok(), "contracts instantiate defaults: {:?}", cli.err());
+}
+
+#[test]
+fn parse_contracts_call_value_and_gas() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "contracts", "call",
+        "--contract", "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+        "--data", "0x",
+        "--value", "0",
+        "--gas-ref-time", "1",
+        "--gas-proof-size", "1",
+    ]);
+    assert!(cli.is_ok(), "contracts call min gas: {:?}", cli.err());
+}
+
+// =====================================================================
+// EVM — boundary tests
+// =====================================================================
+
+#[test]
+fn parse_evm_call_default_gas() {
+    // Defaults: input="0x", value=0x00...00, gas_limit=21000, max_fee_per_gas=0x00...01
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "evm", "call",
+        "--source", "0x0000000000000000000000000000000000000000",
+        "--target", "0x0000000000000000000000000000000000000000",
+    ]);
+    assert!(cli.is_ok(), "evm call zero addresses with defaults: {:?}", cli.err());
+}
+
+#[test]
+fn parse_evm_withdraw_zero_amount() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "evm", "withdraw",
+        "--address", "0x1234567890abcdef1234567890abcdef12345678",
+        "--amount", "0",
+    ]);
+    assert!(cli.is_ok(), "evm withdraw zero amount: {:?}", cli.err());
+}
