@@ -298,6 +298,14 @@ pub(super) async fn handle_subscribe(
     output: OutputFormat,
     _batch: bool,
 ) -> Result<()> {
+    // Validate inputs before connecting
+    if let SubscribeCommands::Events { ref filter, ref account, .. } = cmd {
+        validate_event_filter(filter)?;
+        if let Some(ref acct) = account {
+            validate_ss58(acct, "account")?;
+        }
+    }
+
     let json = output.is_json();
     match cmd {
         SubscribeCommands::Blocks => crate::events::subscribe_blocks(client.subxt(), json).await,
@@ -1425,6 +1433,40 @@ pub(super) async fn handle_crowdloan(
         _ => {} // Fall through to write commands that need wallet
     }
 
+    // Validate write-command inputs before wallet unlock
+    match &cmd {
+        CrowdloanCommands::Create { deposit, min_contribution, cap, target, .. } => {
+            validate_crowdloan_amount(*deposit, "deposit")?;
+            validate_crowdloan_amount(*min_contribution, "min-contribution")?;
+            validate_crowdloan_amount(*cap, "cap")?;
+            if *min_contribution > *cap {
+                anyhow::bail!(
+                    "Invalid crowdloan: min_contribution ({:.9}) exceeds cap ({:.9}).\n  Tip: min_contribution must be ≤ cap.",
+                    min_contribution, cap
+                );
+            }
+            if *deposit > *cap {
+                anyhow::bail!(
+                    "Invalid crowdloan: deposit ({:.9}) exceeds cap ({:.9}).\n  Tip: deposit should be ≤ cap.",
+                    deposit, cap
+                );
+            }
+            if let Some(ref t) = target {
+                validate_ss58(t, "target")?;
+            }
+        }
+        CrowdloanCommands::Contribute { amount, .. } => {
+            validate_crowdloan_amount(*amount, "contribution amount")?;
+        }
+        CrowdloanCommands::UpdateCap { cap, .. } => {
+            validate_crowdloan_amount(*cap, "cap")?;
+        }
+        CrowdloanCommands::UpdateMinContribution { min_contribution, .. } => {
+            validate_crowdloan_amount(*min_contribution, "min-contribution")?;
+        }
+        _ => {} // ID-only commands validated by clap (u32)
+    }
+
     // Write commands need wallet
     let mut wallet = open_wallet(wallet_dir, wallet_name)?;
     unlock_coldkey(&mut wallet, password)?;
@@ -1578,6 +1620,39 @@ pub(super) async fn handle_liquidity(
     client: &Client,
     ctx: &Ctx<'_>,
 ) -> Result<()> {
+    // Validate inputs before wallet unlock
+    match &cmd {
+        LiquidityCommands::Add { netuid, price_low, price_high, amount, hotkey } => {
+            validate_netuid(*netuid)?;
+            validate_price(*price_low, "price-low")?;
+            validate_price(*price_high, "price-high")?;
+            if *amount == 0 {
+                anyhow::bail!("Invalid liquidity amount: cannot be zero.\n  Tip: specify a positive RAO amount.");
+            }
+            if let Some(ref hk) = hotkey {
+                validate_ss58(hk, "hotkey")?;
+            }
+        }
+        LiquidityCommands::Remove { netuid, hotkey, .. } => {
+            validate_netuid(*netuid)?;
+            if let Some(ref hk) = hotkey {
+                validate_ss58(hk, "hotkey")?;
+            }
+        }
+        LiquidityCommands::Modify { netuid, delta, hotkey, .. } => {
+            validate_netuid(*netuid)?;
+            if *delta == 0 {
+                anyhow::bail!("Invalid liquidity delta: cannot be zero.\n  Tip: use a positive value to add or negative to remove liquidity.");
+            }
+            if let Some(ref hk) = hotkey {
+                validate_ss58(hk, "hotkey")?;
+            }
+        }
+        LiquidityCommands::Toggle { netuid, .. } => {
+            validate_netuid(*netuid)?;
+        }
+    }
+
     let hotkey_name = ctx.hotkey_name;
     let mut wallet = open_wallet(ctx.wallet_dir, ctx.wallet_name)?;
     unlock_coldkey(&mut wallet, ctx.password)?;
@@ -1684,6 +1759,21 @@ pub(super) async fn handle_commitment(
     client: &Client,
     ctx: &Ctx<'_>,
 ) -> Result<()> {
+    // Validate inputs before wallet/chain access
+    match &cmd {
+        CommitmentCommands::Set { netuid, data } => {
+            validate_netuid(*netuid)?;
+            validate_commitment_data(data)?;
+        }
+        CommitmentCommands::Get { netuid, hotkey } => {
+            validate_netuid(*netuid)?;
+            validate_ss58(hotkey, "hotkey")?;
+        }
+        CommitmentCommands::List { netuid } => {
+            validate_netuid(*netuid)?;
+        }
+    }
+
     match cmd {
         CommitmentCommands::Set { netuid, data } => {
             let mut wallet = open_wallet(ctx.wallet_dir, ctx.wallet_name)?;

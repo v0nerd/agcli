@@ -10,11 +10,13 @@ use proptest::prelude::*;
 
 use agcli::cli::helpers::{
     json_to_subxt_value, parse_children, parse_json_args, parse_weight_pairs,
-    validate_amount, validate_batch_axon_json, validate_delegate_take, validate_derive_input,
-    validate_emission_weights, validate_evm_address, validate_hex_data, validate_ipv4,
-    validate_max_cost, validate_mnemonic, validate_multisig_json_args, validate_name,
-    validate_netuid, validate_pallet_call, validate_password_strength, validate_port,
-    validate_schedule_id, validate_ss58, validate_symbol, validate_take_pct,
+    validate_amount, validate_batch_axon_json, validate_commitment_data,
+    validate_crowdloan_amount, validate_delegate_take, validate_derive_input,
+    validate_emission_weights, validate_event_filter, validate_evm_address,
+    validate_hex_data, validate_ipv4, validate_max_cost, validate_mnemonic,
+    validate_multisig_json_args, validate_name, validate_netuid, validate_pallet_call,
+    validate_password_strength, validate_port, validate_price, validate_schedule_id,
+    validate_ss58, validate_symbol, validate_take_pct,
 };
 
 // ──── validate_amount: never panics, valid amounts always accepted ────
@@ -962,5 +964,69 @@ proptest! {
     fn fuzz_schedule_id_too_long_rejected(s in ".{33,100}") {
         prop_assert!(validate_schedule_id(&s).is_err(),
             "id > 32 bytes should be rejected: len={}", s.len());
+    }
+
+    // ──── validate_crowdloan_amount: never panics on arbitrary input ────
+
+    #[test]
+    fn fuzz_crowdloan_amount_no_panic(v in any::<f64>()) {
+        let _ = validate_crowdloan_amount(v, "test");
+    }
+
+    #[test]
+    fn fuzz_crowdloan_amount_positive_accepted(v in 0.000000001f64..1e15f64) {
+        prop_assert!(validate_crowdloan_amount(v, "deposit").is_ok(),
+            "positive amount should be accepted: {}", v);
+    }
+
+    #[test]
+    fn fuzz_crowdloan_amount_negative_rejected(v in -1e15f64..-0.0000001f64) {
+        prop_assert!(validate_crowdloan_amount(v, "cap").is_err(),
+            "negative amount should be rejected: {}", v);
+    }
+
+    // ──── validate_price: never panics on arbitrary input ────
+
+    #[test]
+    fn fuzz_price_no_panic(v in any::<f64>()) {
+        let _ = validate_price(v, "test");
+    }
+
+    #[test]
+    fn fuzz_price_positive_accepted(v in 0.000000001f64..1e15f64) {
+        prop_assert!(validate_price(v, "price-low").is_ok(),
+            "positive price should be accepted: {}", v);
+    }
+
+    #[test]
+    fn fuzz_price_non_positive_rejected(v in -1e15f64..=0.0f64) {
+        prop_assert!(validate_price(v, "price-high").is_err(),
+            "non-positive price should be rejected: {}", v);
+    }
+
+    // ──── validate_commitment_data: never panics on arbitrary input ────
+
+    #[test]
+    fn fuzz_commitment_data_no_panic(s in "\\PC{0,2000}") {
+        let _ = validate_commitment_data(&s);
+    }
+
+    #[test]
+    fn fuzz_commitment_data_non_empty_accepted(s in "[a-zA-Z0-9:,._-]{1,1024}") {
+        prop_assert!(validate_commitment_data(&s).is_ok(),
+            "non-empty valid data should be accepted: len={}", s.len());
+    }
+
+    #[test]
+    fn fuzz_commitment_data_too_long_rejected(s in ".{1025,2000}") {
+        prop_assert!(validate_commitment_data(&s).is_err(),
+            "data > 1024 bytes should be rejected: len={}", s.len());
+    }
+
+    // ──── validate_event_filter: never panics on arbitrary input ────
+
+    #[test]
+    fn fuzz_event_filter_no_panic(s in "\\PC{0,100}") {
+        let _ = validate_event_filter(&s);
     }
 }

@@ -7842,3 +7842,832 @@ fn parse_contracts_instantiate_max_gas() {
     ]);
     assert!(cli.is_ok(), "contracts instantiate max u64 gas: {:?}", cli.err());
 }
+
+// =====================================================================
+// Crowdloan — expanded boundary + edge case tests
+// =====================================================================
+
+#[test]
+fn parse_crowdloan_list() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "crowdloan", "list"]);
+    assert!(cli.is_ok(), "crowdloan list: {:?}", cli.err());
+}
+
+#[test]
+fn parse_crowdloan_info_with_id() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "crowdloan", "info", "--crowdloan-id", "42",
+    ]);
+    assert!(cli.is_ok(), "crowdloan info: {:?}", cli.err());
+}
+
+#[test]
+fn parse_crowdloan_contributors_with_id() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "crowdloan", "contributors", "--crowdloan-id", "1",
+    ]);
+    assert!(cli.is_ok(), "crowdloan contributors: {:?}", cli.err());
+}
+
+#[test]
+fn parse_crowdloan_create_all_fields() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "crowdloan", "create",
+        "--deposit", "10.5",
+        "--min-contribution", "0.1",
+        "--cap", "1000.0",
+        "--end-block", "500000",
+        "--target", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(cli.is_ok(), "crowdloan create all fields: {:?}", cli.err());
+}
+
+#[test]
+fn parse_crowdloan_create_without_target() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "crowdloan", "create",
+        "--deposit", "1",
+        "--min-contribution", "0.01",
+        "--cap", "100",
+        "--end-block", "100000",
+    ]);
+    assert!(cli.is_ok(), "crowdloan create without target: {:?}", cli.err());
+}
+
+#[test]
+fn parse_crowdloan_create_max_end_block() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "crowdloan", "create",
+        "--deposit", "1",
+        "--min-contribution", "0.01",
+        "--cap", "100",
+        "--end-block", "4294967295",
+    ]);
+    assert!(cli.is_ok(), "crowdloan create max u32 end_block: {:?}", cli.err());
+}
+
+#[test]
+fn parse_crowdloan_create_end_block_overflow() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "crowdloan", "create",
+        "--deposit", "1",
+        "--min-contribution", "0.01",
+        "--cap", "100",
+        "--end-block", "4294967296",
+    ]);
+    assert!(cli.is_err(), "end_block u32 overflow should fail");
+}
+
+#[test]
+fn parse_crowdloan_contribute_basic() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "crowdloan", "contribute",
+        "--crowdloan-id", "5",
+        "--amount", "10.0",
+    ]);
+    assert!(cli.is_ok(), "crowdloan contribute: {:?}", cli.err());
+}
+
+#[test]
+fn parse_crowdloan_contribute_max_id() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "crowdloan", "contribute",
+        "--crowdloan-id", "4294967295",
+        "--amount", "1.0",
+    ]);
+    assert!(cli.is_ok(), "crowdloan contribute max u32 id: {:?}", cli.err());
+}
+
+#[test]
+fn parse_crowdloan_contribute_id_overflow() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "crowdloan", "contribute",
+        "--crowdloan-id", "4294967296",
+        "--amount", "1.0",
+    ]);
+    assert!(cli.is_err(), "crowdloan-id u32 overflow should fail");
+}
+
+#[test]
+fn parse_crowdloan_contribute_missing_amount() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "crowdloan", "contribute",
+        "--crowdloan-id", "1",
+    ]);
+    assert!(cli.is_err(), "crowdloan contribute missing amount should fail");
+}
+
+#[test]
+fn parse_crowdloan_contribute_missing_id() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "crowdloan", "contribute",
+        "--amount", "10.0",
+    ]);
+    assert!(cli.is_err(), "crowdloan contribute missing id should fail");
+}
+
+#[test]
+fn parse_crowdloan_create_missing_deposit() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "crowdloan", "create",
+        "--min-contribution", "0.01",
+        "--cap", "100",
+        "--end-block", "100000",
+    ]);
+    assert!(cli.is_err(), "crowdloan create missing deposit should fail");
+}
+
+#[test]
+fn parse_crowdloan_create_missing_cap() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "crowdloan", "create",
+        "--deposit", "1",
+        "--min-contribution", "0.01",
+        "--end-block", "100000",
+    ]);
+    assert!(cli.is_err(), "crowdloan create missing cap should fail");
+}
+
+#[test]
+fn parse_crowdloan_update_cap_basic() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "crowdloan", "update-cap",
+        "--crowdloan-id", "3",
+        "--cap", "500.0",
+    ]);
+    assert!(cli.is_ok(), "crowdloan update-cap: {:?}", cli.err());
+}
+
+#[test]
+fn parse_crowdloan_update_end_basic() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "crowdloan", "update-end",
+        "--crowdloan-id", "3",
+        "--end-block", "200000",
+    ]);
+    assert!(cli.is_ok(), "crowdloan update-end: {:?}", cli.err());
+}
+
+#[test]
+fn parse_crowdloan_update_min_contribution_basic() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "crowdloan", "update-min-contribution",
+        "--crowdloan-id", "3",
+        "--min-contribution", "0.5",
+    ]);
+    assert!(cli.is_ok(), "crowdloan update-min-contribution: {:?}", cli.err());
+}
+
+#[test]
+fn parse_crowdloan_with_global_flags() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--network", "test", "--wallet", "mywallet",
+        "crowdloan", "info", "--crowdloan-id", "1",
+    ]);
+    assert!(cli.is_ok(), "crowdloan with global flags: {:?}", cli.err());
+}
+
+#[test]
+fn parse_crowdloan_with_json_output() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--output", "json",
+        "crowdloan", "list",
+    ]);
+    assert!(cli.is_ok(), "crowdloan list json: {:?}", cli.err());
+}
+
+// =====================================================================
+// Commitment — expanded boundary + edge case tests
+// =====================================================================
+
+#[test]
+fn parse_commitment_set_with_global() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--network", "test",
+        "commitment", "set",
+        "--netuid", "1",
+        "--data", "endpoint:http://my.server:8080,version:2.0",
+    ]);
+    assert!(cli.is_ok(), "commitment set with global: {:?}", cli.err());
+}
+
+#[test]
+fn parse_commitment_set_missing_data() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "commitment", "set", "--netuid", "1",
+    ]);
+    assert!(cli.is_err(), "commitment set missing data should fail");
+}
+
+#[test]
+fn parse_commitment_set_missing_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "commitment", "set", "--data", "key:value",
+    ]);
+    assert!(cli.is_err(), "commitment set missing netuid should fail");
+}
+
+#[test]
+fn parse_commitment_get_missing_hotkey() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "commitment", "get", "--netuid", "1",
+    ]);
+    assert!(cli.is_err(), "commitment get missing hotkey should fail");
+}
+
+#[test]
+fn parse_commitment_get_missing_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "commitment", "get",
+        "--hotkey", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(cli.is_err(), "commitment get missing netuid should fail");
+}
+
+#[test]
+fn parse_commitment_list_missing_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "commitment", "list",
+    ]);
+    assert!(cli.is_err(), "commitment list missing netuid should fail");
+}
+
+#[test]
+fn parse_commitment_get_with_json_output() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--output", "json",
+        "commitment", "get",
+        "--netuid", "1",
+        "--hotkey", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(cli.is_ok(), "commitment get json: {:?}", cli.err());
+}
+
+#[test]
+fn parse_commitment_set_netuid_max() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "commitment", "set",
+        "--netuid", "65535",
+        "--data", "endpoint:http://test",
+    ]);
+    assert!(cli.is_ok(), "commitment set max u16 netuid: {:?}", cli.err());
+}
+
+#[test]
+fn parse_commitment_set_netuid_overflow() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "commitment", "set",
+        "--netuid", "65536",
+        "--data", "endpoint:http://test",
+    ]);
+    assert!(cli.is_err(), "commitment set netuid u16 overflow should fail");
+}
+
+// =====================================================================
+// Liquidity — expanded boundary + edge case tests
+// =====================================================================
+
+#[test]
+fn parse_liquidity_add_all_args() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "liquidity", "add",
+        "--netuid", "1",
+        "--price-low", "0.001",
+        "--price-high", "1.5",
+        "--amount", "1000000",
+        "--hotkey", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(cli.is_ok(), "liquidity add all args: {:?}", cli.err());
+}
+
+#[test]
+fn parse_liquidity_add_missing_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "liquidity", "add",
+        "--price-low", "0.001",
+        "--price-high", "1.0",
+        "--amount", "1000",
+    ]);
+    assert!(cli.is_err(), "liquidity add missing netuid should fail");
+}
+
+#[test]
+fn parse_liquidity_add_missing_price_low() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "liquidity", "add",
+        "--netuid", "1",
+        "--price-high", "1.0",
+        "--amount", "1000",
+    ]);
+    assert!(cli.is_err(), "liquidity add missing price-low should fail");
+}
+
+#[test]
+fn parse_liquidity_add_missing_amount() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "liquidity", "add",
+        "--netuid", "1",
+        "--price-low", "0.001",
+        "--price-high", "1.0",
+    ]);
+    assert!(cli.is_err(), "liquidity add missing amount should fail");
+}
+
+#[test]
+fn parse_liquidity_add_max_amount() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "liquidity", "add",
+        "--netuid", "1",
+        "--price-low", "0.001",
+        "--price-high", "1.0",
+        "--amount", "18446744073709551615",
+    ]);
+    assert!(cli.is_ok(), "liquidity add max u64 amount: {:?}", cli.err());
+}
+
+#[test]
+fn parse_liquidity_add_amount_overflow() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "liquidity", "add",
+        "--netuid", "1",
+        "--price-low", "0.001",
+        "--price-high", "1.0",
+        "--amount", "18446744073709551616",
+    ]);
+    assert!(cli.is_err(), "liquidity add u64 overflow should fail");
+}
+
+#[test]
+fn parse_liquidity_remove_basic() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "liquidity", "remove",
+        "--netuid", "1",
+        "--position-id", "42",
+    ]);
+    assert!(cli.is_ok(), "liquidity remove: {:?}", cli.err());
+}
+
+#[test]
+fn parse_liquidity_remove_with_hotkey() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "liquidity", "remove",
+        "--netuid", "1",
+        "--position-id", "42",
+        "--hotkey", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(cli.is_ok(), "liquidity remove with hotkey: {:?}", cli.err());
+}
+
+#[test]
+fn parse_liquidity_remove_missing_position() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "liquidity", "remove",
+        "--netuid", "1",
+    ]);
+    assert!(cli.is_err(), "liquidity remove missing position should fail");
+}
+
+#[test]
+fn parse_liquidity_remove_max_position_id() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "liquidity", "remove",
+        "--netuid", "1",
+        "--position-id", "340282366920938463463374607431768211455",
+    ]);
+    assert!(cli.is_ok(), "liquidity remove max u128: {:?}", cli.err());
+}
+
+#[test]
+fn parse_liquidity_modify_negative_delta() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "liquidity", "modify",
+        "--netuid", "1",
+        "--position-id", "10",
+        "--delta", "-5000",
+    ]);
+    assert!(cli.is_ok(), "liquidity modify negative delta: {:?}", cli.err());
+}
+
+#[test]
+fn parse_liquidity_modify_positive_delta() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "liquidity", "modify",
+        "--netuid", "1",
+        "--position-id", "10",
+        "--delta", "5000",
+    ]);
+    assert!(cli.is_ok(), "liquidity modify positive delta: {:?}", cli.err());
+}
+
+#[test]
+fn parse_liquidity_modify_missing_delta() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "liquidity", "modify",
+        "--netuid", "1",
+        "--position-id", "10",
+    ]);
+    assert!(cli.is_err(), "liquidity modify missing delta should fail");
+}
+
+#[test]
+fn parse_liquidity_toggle_enable() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "liquidity", "toggle",
+        "--netuid", "1",
+        "--enable",
+    ]);
+    assert!(cli.is_ok(), "liquidity toggle enable: {:?}", cli.err());
+}
+
+#[test]
+fn parse_liquidity_toggle_disable() {
+    // Without --enable flag, enable defaults to false
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "liquidity", "toggle",
+        "--netuid", "1",
+    ]);
+    assert!(cli.is_ok(), "liquidity toggle disable: {:?}", cli.err());
+}
+
+#[test]
+fn parse_liquidity_with_global_flags() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--network", "test", "--wallet", "mywallet",
+        "liquidity", "add",
+        "--netuid", "5",
+        "--price-low", "0.01",
+        "--price-high", "10.0",
+        "--amount", "500",
+    ]);
+    assert!(cli.is_ok(), "liquidity with global flags: {:?}", cli.err());
+}
+
+// =====================================================================
+// Subscribe — expanded tests
+// =====================================================================
+
+#[test]
+fn parse_subscribe_blocks_with_json() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--output", "json", "subscribe", "blocks",
+    ]);
+    assert!(cli.is_ok(), "subscribe blocks json: {:?}", cli.err());
+}
+
+#[test]
+fn parse_subscribe_events_default_filter() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subscribe", "events",
+    ]);
+    assert!(cli.is_ok(), "subscribe events default: {:?}", cli.err());
+}
+
+#[test]
+fn parse_subscribe_events_all_filters() {
+    for filter in ["all", "staking", "registration", "transfer", "weights", "subnet"] {
+        let cli = agcli::cli::Cli::try_parse_from([
+            "agcli", "subscribe", "events", "--filter", filter,
+        ]);
+        assert!(cli.is_ok(), "subscribe events --filter {}: {:?}", filter, cli.err());
+    }
+}
+
+#[test]
+fn parse_subscribe_events_with_account_and_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subscribe", "events",
+        "--filter", "staking",
+        "--netuid", "1",
+        "--account", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(cli.is_ok(), "subscribe events all opts: {:?}", cli.err());
+}
+
+#[test]
+fn parse_subscribe_events_netuid_max() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subscribe", "events",
+        "--filter", "all",
+        "--netuid", "65535",
+    ]);
+    assert!(cli.is_ok(), "subscribe events max netuid: {:?}", cli.err());
+}
+
+#[test]
+fn parse_subscribe_events_with_global_flags() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--network", "finney", "--output", "json",
+        "subscribe", "events", "--filter", "transfer",
+    ]);
+    assert!(cli.is_ok(), "subscribe events with globals: {:?}", cli.err());
+}
+
+// =====================================================================
+// Diff — expanded boundary tests
+// =====================================================================
+
+#[test]
+fn parse_diff_portfolio_with_address() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "diff", "portfolio",
+        "--address", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        "--block1", "100",
+        "--block2", "200",
+    ]);
+    assert!(cli.is_ok(), "diff portfolio with address: {:?}", cli.err());
+}
+
+#[test]
+fn parse_diff_portfolio_max_blocks() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "diff", "portfolio",
+        "--block1", "0",
+        "--block2", "4294967295",
+    ]);
+    assert!(cli.is_ok(), "diff portfolio max u32: {:?}", cli.err());
+}
+
+#[test]
+fn parse_diff_portfolio_block_overflow() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "diff", "portfolio",
+        "--block1", "0",
+        "--block2", "4294967296",
+    ]);
+    assert!(cli.is_err(), "diff portfolio block overflow should fail");
+}
+
+#[test]
+fn parse_diff_subnet_missing_block2() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "diff", "subnet",
+        "--netuid", "1",
+        "--block1", "100",
+    ]);
+    assert!(cli.is_err(), "diff subnet missing block2 should fail");
+}
+
+#[test]
+fn parse_diff_metagraph_missing_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "diff", "metagraph",
+        "--block1", "100",
+        "--block2", "200",
+    ]);
+    assert!(cli.is_err(), "diff metagraph missing netuid should fail");
+}
+
+#[test]
+fn parse_diff_network_zero_blocks() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "diff", "network",
+        "--block1", "0",
+        "--block2", "0",
+    ]);
+    assert!(cli.is_ok(), "diff network zero blocks: {:?}", cli.err());
+}
+
+#[test]
+fn parse_diff_subnet_max_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "diff", "subnet",
+        "--netuid", "65535",
+        "--block1", "100",
+        "--block2", "200",
+    ]);
+    assert!(cli.is_ok(), "diff subnet max netuid: {:?}", cli.err());
+}
+
+// =====================================================================
+// Block — expanded boundary tests
+// =====================================================================
+
+#[test]
+fn parse_block_info_max() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "block", "info", "--number", "4294967295",
+    ]);
+    assert!(cli.is_ok(), "block info max u32: {:?}", cli.err());
+}
+
+#[test]
+fn parse_block_info_zero() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "block", "info", "--number", "0",
+    ]);
+    assert!(cli.is_ok(), "block info zero: {:?}", cli.err());
+}
+
+#[test]
+fn parse_block_info_overflow() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "block", "info", "--number", "4294967296",
+    ]);
+    assert!(cli.is_err(), "block info u32 overflow should fail");
+}
+
+#[test]
+fn parse_block_info_missing_number() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "block", "info",
+    ]);
+    assert!(cli.is_err(), "block info missing number should fail");
+}
+
+#[test]
+fn parse_block_latest_with_json() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--output", "json", "block", "latest",
+    ]);
+    assert!(cli.is_ok(), "block latest json: {:?}", cli.err());
+}
+
+#[test]
+fn parse_block_range_same_block() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "block", "range", "--from", "100", "--to", "100",
+    ]);
+    assert!(cli.is_ok(), "block range same block: {:?}", cli.err());
+}
+
+#[test]
+fn parse_block_range_max_values() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "block", "range",
+        "--from", "4294967294",
+        "--to", "4294967295",
+    ]);
+    assert!(cli.is_ok(), "block range max u32: {:?}", cli.err());
+}
+
+#[test]
+fn parse_block_range_zero_start() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "block", "range", "--from", "0", "--to", "10",
+    ]);
+    assert!(cli.is_ok(), "block range from zero: {:?}", cli.err());
+}
+
+#[test]
+fn parse_block_with_global_flags() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--network", "finney", "block", "latest",
+    ]);
+    assert!(cli.is_ok(), "block with global flags: {:?}", cli.err());
+}
+
+// =====================================================================
+// Utils — expanded boundary tests
+// =====================================================================
+
+#[test]
+fn parse_utils_convert_default() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "utils", "convert", "--amount", "1.0",
+    ]);
+    assert!(cli.is_ok(), "utils convert default: {:?}", cli.err());
+}
+
+#[test]
+fn parse_utils_convert_with_to_rao() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "utils", "convert", "--amount", "1.0", "--to-rao",
+    ]);
+    assert!(cli.is_ok(), "utils convert to-rao: {:?}", cli.err());
+}
+
+#[test]
+fn parse_utils_convert_no_args() {
+    // All convert args are optional
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "utils", "convert",
+    ]);
+    assert!(cli.is_ok(), "utils convert no args: {:?}", cli.err());
+}
+
+#[test]
+fn parse_utils_convert_alpha_with_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "utils", "convert",
+        "--alpha", "100.0",
+        "--netuid", "1",
+    ]);
+    assert!(cli.is_ok(), "utils convert alpha: {:?}", cli.err());
+}
+
+#[test]
+fn parse_utils_convert_tao_with_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "utils", "convert",
+        "--tao", "10.0",
+        "--netuid", "5",
+    ]);
+    assert!(cli.is_ok(), "utils convert tao to alpha: {:?}", cli.err());
+}
+
+#[test]
+fn parse_utils_latency_custom_pings() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "utils", "latency", "--pings", "10",
+    ]);
+    assert!(cli.is_ok(), "utils latency custom pings: {:?}", cli.err());
+}
+
+#[test]
+fn parse_utils_latency_one_ping() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "utils", "latency", "--pings", "1",
+    ]);
+    assert!(cli.is_ok(), "utils latency one ping: {:?}", cli.err());
+}
+
+#[test]
+fn parse_utils_latency_with_extra_endpoints() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "utils", "latency",
+        "--extra", "ws://127.0.0.1:9944,ws://custom:9945",
+        "--pings", "3",
+    ]);
+    assert!(cli.is_ok(), "utils latency extra endpoints: {:?}", cli.err());
+}
+
+#[test]
+fn parse_utils_latency_zero_pings() {
+    // Zero pings should parse (runtime may fail, but CLI should accept)
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "utils", "latency", "--pings", "0",
+    ]);
+    assert!(cli.is_ok(), "utils latency zero pings: {:?}", cli.err());
+}
+
+// =====================================================================
+// Root — expanded tests
+// =====================================================================
+
+#[test]
+fn parse_root_weights_multi_uids() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "root", "weights",
+        "--weights", "0:100,1:50,2:25",
+    ]);
+    assert!(cli.is_ok(), "root weights multi uids: {:?}", cli.err());
+}
+
+#[test]
+fn parse_root_weights_missing_arg() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "root", "weights",
+    ]);
+    assert!(cli.is_err(), "root weights missing arg should fail");
+}
+
+#[test]
+fn parse_root_register_with_json() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--output", "json", "root", "register",
+    ]);
+    assert!(cli.is_ok(), "root register json: {:?}", cli.err());
+}
+
+#[test]
+fn parse_root_weights_with_global_flags() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--network", "finney", "--wallet", "mywallet",
+        "root", "weights", "--weights", "0:100",
+    ]);
+    assert!(cli.is_ok(), "root weights with global: {:?}", cli.err());
+}
+
+// =====================================================================
+// Swap — expanded boundary tests
+// =====================================================================
+
+#[test]
+fn parse_swap_hotkey_with_global() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--network", "test", "--wallet", "mywallet",
+        "swap", "hotkey",
+        "--new-hotkey", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(cli.is_ok(), "swap hotkey with global: {:?}", cli.err());
+}
+
+#[test]
+fn parse_swap_coldkey_with_global() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--network", "test",
+        "swap", "coldkey",
+        "--new-coldkey", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(cli.is_ok(), "swap coldkey with global: {:?}", cli.err());
+}
+
+#[test]
+fn parse_swap_hotkey_with_password() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--password", "test123",
+        "swap", "hotkey",
+        "--new-hotkey", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(cli.is_ok(), "swap hotkey with password: {:?}", cli.err());
+}

@@ -1173,6 +1173,78 @@ pub fn validate_schedule_id(id: &str) -> Result<()> {
     Ok(())
 }
 
+/// Validate a crowdloan TAO amount (deposit, contribution, cap).
+/// Must be positive and finite. Unlike staking amounts, zero is rejected with a crowdloan-specific tip.
+pub fn validate_crowdloan_amount(amount: f64, label: &str) -> Result<()> {
+    if !amount.is_finite() {
+        anyhow::bail!(
+            "Invalid {}: must be a finite number (got {}).\n  Tip: use a decimal TAO amount like 1.0 or 100.",
+            label, amount
+        );
+    }
+    if amount < 0.0 {
+        anyhow::bail!(
+            "Invalid {}: {:.9} TAO. Amount cannot be negative.\n  Tip: use a positive TAO amount.",
+            label, amount
+        );
+    }
+    if amount == 0.0 {
+        anyhow::bail!(
+            "Invalid {}: amount must be greater than zero.\n  Tip: specify a TAO amount like --{} 1.0",
+            label, label.replace(' ', "-")
+        );
+    }
+    Ok(())
+}
+
+/// Validate a liquidity price bound (TAO per Alpha).
+/// Must be positive and finite. Zero and negative prices are rejected.
+pub fn validate_price(price: f64, label: &str) -> Result<()> {
+    if !price.is_finite() {
+        anyhow::bail!(
+            "Invalid {}: must be a finite number (got {}).\n  Tip: use a decimal price like 0.001 or 1.5",
+            label, price
+        );
+    }
+    if price <= 0.0 {
+        anyhow::bail!(
+            "Invalid {}: {:.9}. Price must be positive (TAO per Alpha).\n  Tip: use a positive decimal like 0.001",
+            label, price
+        );
+    }
+    Ok(())
+}
+
+/// Validate commitment data string. Must be non-empty and within a reasonable size.
+pub fn validate_commitment_data(data: &str) -> Result<()> {
+    if data.trim().is_empty() {
+        anyhow::bail!(
+            "Invalid commitment data: cannot be empty.\n  Tip: provide key:value pairs like \"endpoint:http://myserver.com,version:1.0\""
+        );
+    }
+    if data.len() > 1024 {
+        anyhow::bail!(
+            "Invalid commitment data: too long ({} bytes, max 1024).\n  Tip: keep commitment data concise.",
+            data.len()
+        );
+    }
+    Ok(())
+}
+
+/// Validate a subscribe event filter category.
+/// Valid values: all, staking, registration, transfer, weights, subnet.
+pub fn validate_event_filter(filter: &str) -> Result<()> {
+    const VALID_FILTERS: &[&str] = &["all", "staking", "registration", "transfer", "weights", "subnet"];
+    let lower = filter.trim().to_lowercase();
+    if !VALID_FILTERS.contains(&lower.as_str()) {
+        anyhow::bail!(
+            "Invalid event filter: '{}'. Valid filters are: {}.\n  Tip: use --filter all to see all events.",
+            filter, VALID_FILTERS.join(", ")
+        );
+    }
+    Ok(())
+}
+
 /// Parse an optional JSON string into a vec of subxt dynamic Values.
 /// Validates the JSON structure before converting.
 pub fn parse_json_args(args: &Option<String>) -> anyhow::Result<Vec<subxt::dynamic::Value>> {

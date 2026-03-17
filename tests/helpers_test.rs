@@ -2652,3 +2652,259 @@ fn schedule_id_error_includes_tip() {
     let err = validate_schedule_id("").unwrap_err();
     assert!(err.to_string().contains("Tip:"), "error should include Tip: {}", err);
 }
+
+// =====================================================================
+// validate_crowdloan_amount tests
+// =====================================================================
+
+use agcli::cli::helpers::validate_crowdloan_amount;
+
+#[test]
+fn crowdloan_amount_valid_small() {
+    assert!(validate_crowdloan_amount(0.001, "deposit").is_ok());
+}
+
+#[test]
+fn crowdloan_amount_valid_large() {
+    assert!(validate_crowdloan_amount(1_000_000.0, "cap").is_ok());
+}
+
+#[test]
+fn crowdloan_amount_valid_one() {
+    assert!(validate_crowdloan_amount(1.0, "contribution amount").is_ok());
+}
+
+#[test]
+fn crowdloan_amount_zero_rejected() {
+    let err = validate_crowdloan_amount(0.0, "deposit").unwrap_err();
+    assert!(err.to_string().contains("greater than zero"), "got: {}", err);
+}
+
+#[test]
+fn crowdloan_amount_negative_rejected() {
+    let err = validate_crowdloan_amount(-1.0, "cap").unwrap_err();
+    assert!(err.to_string().contains("negative"), "got: {}", err);
+}
+
+#[test]
+fn crowdloan_amount_nan_rejected() {
+    let err = validate_crowdloan_amount(f64::NAN, "deposit").unwrap_err();
+    assert!(err.to_string().contains("finite"), "got: {}", err);
+}
+
+#[test]
+fn crowdloan_amount_inf_rejected() {
+    let err = validate_crowdloan_amount(f64::INFINITY, "cap").unwrap_err();
+    assert!(err.to_string().contains("finite"), "got: {}", err);
+}
+
+#[test]
+fn crowdloan_amount_neg_inf_rejected() {
+    let err = validate_crowdloan_amount(f64::NEG_INFINITY, "cap").unwrap_err();
+    assert!(err.to_string().contains("finite"), "got: {}", err);
+}
+
+#[test]
+fn crowdloan_amount_tiny_valid() {
+    // Smallest representable positive value — should pass
+    assert!(validate_crowdloan_amount(f64::MIN_POSITIVE, "deposit").is_ok());
+}
+
+#[test]
+fn crowdloan_amount_error_includes_tip() {
+    let err = validate_crowdloan_amount(0.0, "deposit").unwrap_err();
+    assert!(err.to_string().contains("Tip:"), "error should include Tip: {}", err);
+}
+
+#[test]
+fn crowdloan_amount_negative_error_includes_tip() {
+    let err = validate_crowdloan_amount(-5.0, "cap").unwrap_err();
+    assert!(err.to_string().contains("Tip:"), "error should include Tip: {}", err);
+}
+
+// =====================================================================
+// validate_price tests
+// =====================================================================
+
+use agcli::cli::helpers::validate_price;
+
+#[test]
+fn price_valid_small() {
+    assert!(validate_price(0.001, "price-low").is_ok());
+}
+
+#[test]
+fn price_valid_large() {
+    assert!(validate_price(1_000_000.0, "price-high").is_ok());
+}
+
+#[test]
+fn price_valid_one() {
+    assert!(validate_price(1.0, "price-low").is_ok());
+}
+
+#[test]
+fn price_zero_rejected() {
+    let err = validate_price(0.0, "price-low").unwrap_err();
+    assert!(err.to_string().contains("positive"), "got: {}", err);
+}
+
+#[test]
+fn price_negative_rejected() {
+    let err = validate_price(-0.5, "price-high").unwrap_err();
+    assert!(err.to_string().contains("positive"), "got: {}", err);
+}
+
+#[test]
+fn price_nan_rejected() {
+    let err = validate_price(f64::NAN, "price-low").unwrap_err();
+    assert!(err.to_string().contains("finite"), "got: {}", err);
+}
+
+#[test]
+fn price_inf_rejected() {
+    let err = validate_price(f64::INFINITY, "price-high").unwrap_err();
+    assert!(err.to_string().contains("finite"), "got: {}", err);
+}
+
+#[test]
+fn price_neg_inf_rejected() {
+    let err = validate_price(f64::NEG_INFINITY, "price-low").unwrap_err();
+    assert!(err.to_string().contains("finite"), "got: {}", err);
+}
+
+#[test]
+fn price_tiny_valid() {
+    assert!(validate_price(f64::MIN_POSITIVE, "price-low").is_ok());
+}
+
+#[test]
+fn price_error_includes_tip() {
+    let err = validate_price(0.0, "price-low").unwrap_err();
+    assert!(err.to_string().contains("Tip:"), "error should include Tip: {}", err);
+}
+
+// =====================================================================
+// validate_commitment_data tests
+// =====================================================================
+
+use agcli::cli::helpers::validate_commitment_data;
+
+#[test]
+fn commitment_data_valid_simple() {
+    assert!(validate_commitment_data("endpoint:http://localhost:8080").is_ok());
+}
+
+#[test]
+fn commitment_data_valid_multi() {
+    assert!(validate_commitment_data("endpoint:http://my.server,version:1.0,type:miner").is_ok());
+}
+
+#[test]
+fn commitment_data_empty_rejected() {
+    let err = validate_commitment_data("").unwrap_err();
+    assert!(err.to_string().contains("empty"), "got: {}", err);
+}
+
+#[test]
+fn commitment_data_whitespace_only_rejected() {
+    let err = validate_commitment_data("   ").unwrap_err();
+    assert!(err.to_string().contains("empty"), "got: {}", err);
+}
+
+#[test]
+fn commitment_data_too_long_rejected() {
+    let long = "x".repeat(1025);
+    let err = validate_commitment_data(&long).unwrap_err();
+    assert!(err.to_string().contains("too long"), "got: {}", err);
+}
+
+#[test]
+fn commitment_data_exactly_1024_ok() {
+    let data = "x".repeat(1024);
+    assert!(validate_commitment_data(&data).is_ok());
+}
+
+#[test]
+fn commitment_data_single_char_valid() {
+    assert!(validate_commitment_data("a").is_ok());
+}
+
+#[test]
+fn commitment_data_error_includes_tip() {
+    let err = validate_commitment_data("").unwrap_err();
+    assert!(err.to_string().contains("Tip:"), "error should include Tip: {}", err);
+}
+
+// =====================================================================
+// validate_event_filter tests
+// =====================================================================
+
+use agcli::cli::helpers::validate_event_filter;
+
+#[test]
+fn event_filter_all_valid() {
+    assert!(validate_event_filter("all").is_ok());
+}
+
+#[test]
+fn event_filter_staking_valid() {
+    assert!(validate_event_filter("staking").is_ok());
+}
+
+#[test]
+fn event_filter_registration_valid() {
+    assert!(validate_event_filter("registration").is_ok());
+}
+
+#[test]
+fn event_filter_transfer_valid() {
+    assert!(validate_event_filter("transfer").is_ok());
+}
+
+#[test]
+fn event_filter_weights_valid() {
+    assert!(validate_event_filter("weights").is_ok());
+}
+
+#[test]
+fn event_filter_subnet_valid() {
+    assert!(validate_event_filter("subnet").is_ok());
+}
+
+#[test]
+fn event_filter_case_insensitive() {
+    assert!(validate_event_filter("ALL").is_ok());
+    assert!(validate_event_filter("Staking").is_ok());
+    assert!(validate_event_filter("TRANSFER").is_ok());
+}
+
+#[test]
+fn event_filter_invalid_rejected() {
+    let err = validate_event_filter("blocks").unwrap_err();
+    assert!(err.to_string().contains("Valid filters"), "got: {}", err);
+}
+
+#[test]
+fn event_filter_empty_rejected() {
+    let err = validate_event_filter("").unwrap_err();
+    assert!(err.to_string().contains("Valid filters"), "got: {}", err);
+}
+
+#[test]
+fn event_filter_nonsense_rejected() {
+    let err = validate_event_filter("foobar").unwrap_err();
+    assert!(err.to_string().contains("Invalid event filter"), "got: {}", err);
+}
+
+#[test]
+fn event_filter_with_spaces() {
+    // Leading/trailing spaces should be trimmed
+    assert!(validate_event_filter("  all  ").is_ok());
+}
+
+#[test]
+fn event_filter_error_includes_tip() {
+    let err = validate_event_filter("bad").unwrap_err();
+    assert!(err.to_string().contains("Tip:"), "error should include Tip: {}", err);
+}
