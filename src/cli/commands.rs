@@ -266,6 +266,8 @@ pub async fn execute(cli: Cli) -> Result<()> {
             Ok(())
         }
         Commands::Transfer { dest, amount } => {
+            validate_ss58(&dest, "destination")?;
+            validate_amount(amount, "transfer amount")?;
             let client = connect(&network, dry_run, best).await?;
             let mut wallet = open_wallet(ctx.wallet_dir, ctx.wallet_name)?;
             unlock_coldkey(&mut wallet, ctx.password)?;
@@ -305,6 +307,7 @@ pub async fn execute(cli: Cli) -> Result<()> {
             Ok(())
         }
         Commands::TransferAll { dest, keep_alive } => {
+            validate_ss58(&dest, "destination")?;
             let client = connect(&network, dry_run, best).await?;
             let mut wallet = open_wallet(ctx.wallet_dir, ctx.wallet_name)?;
             unlock_coldkey(&mut wallet, ctx.password)?;

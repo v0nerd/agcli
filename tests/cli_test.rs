@@ -5781,3 +5781,333 @@ fn parse_serve_axon_protocol_overflow() {
     ]);
     assert!(cli.is_err(), "protocol 256 should overflow u8");
 }
+
+// ──── Transfer SS58 validation (CLI parsing tests) ────
+
+#[test]
+fn parse_transfer_valid_ss58_dest() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "transfer",
+        "--dest", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        "--amount", "1.0",
+    ]);
+    assert!(cli.is_ok(), "valid SS58 dest should parse");
+}
+
+#[test]
+fn parse_transfer_no_dest_arg() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "transfer",
+        "--amount", "1.0",
+    ]);
+    assert!(cli.is_err(), "missing dest should fail");
+}
+
+#[test]
+fn parse_transfer_no_amount_arg() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "transfer",
+        "--dest", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(cli.is_err(), "missing amount should fail");
+}
+
+#[test]
+fn parse_transfer_all_bob_dest() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "transfer-all",
+        "--dest", "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    ]);
+    assert!(cli.is_ok(), "transfer-all with valid dest should parse");
+}
+
+#[test]
+fn parse_transfer_all_with_keep_alive() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "transfer-all",
+        "--dest", "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+        "--keep-alive",
+    ]);
+    assert!(cli.is_ok(), "transfer-all with --keep-alive should parse");
+}
+
+#[test]
+fn parse_transfer_all_no_dest_arg() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "transfer-all",
+    ]);
+    assert!(cli.is_err(), "transfer-all without dest should fail");
+}
+
+// ──── Proxy command CLI parsing ────
+
+#[test]
+fn parse_proxy_add_ss58_delegate() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "proxy", "add",
+        "--delegate", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        "--proxy-type", "Any",
+    ]);
+    assert!(cli.is_ok(), "proxy add with valid delegate should parse");
+}
+
+#[test]
+fn parse_proxy_add_no_delegate_arg() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "proxy", "add",
+        "--proxy-type", "Any",
+    ]);
+    assert!(cli.is_err(), "proxy add without delegate should fail");
+}
+
+#[test]
+fn parse_proxy_remove_ss58_delegate() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "proxy", "remove",
+        "--delegate", "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+        "--proxy-type", "Staking",
+    ]);
+    assert!(cli.is_ok(), "proxy remove with valid delegate should parse");
+}
+
+#[test]
+fn parse_proxy_add_delay_100() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "proxy", "add",
+        "--delegate", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        "--proxy-type", "Any",
+        "--delay", "100",
+    ]);
+    assert!(cli.is_ok(), "proxy add with delay should parse");
+}
+
+// ──── Swap command CLI parsing ────
+
+#[test]
+fn parse_swap_hotkey_ss58() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "swap", "hotkey",
+        "--new-hotkey", "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    ]);
+    assert!(cli.is_ok(), "swap hotkey with valid address should parse");
+}
+
+#[test]
+fn parse_swap_hotkey_no_arg() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "swap", "hotkey",
+    ]);
+    assert!(cli.is_err(), "swap hotkey without new-hotkey should fail");
+}
+
+#[test]
+fn parse_swap_coldkey_ss58() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "swap", "coldkey",
+        "--new-coldkey", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(cli.is_ok(), "swap coldkey with valid address should parse");
+}
+
+#[test]
+fn parse_swap_coldkey_no_arg() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "swap", "coldkey",
+    ]);
+    assert!(cli.is_err(), "swap coldkey without new-coldkey should fail");
+}
+
+// ──── Stake transfer-stake CLI parsing ────
+
+#[test]
+fn parse_stake_transfer_stake_all_required() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "stake", "transfer-stake",
+        "--dest", "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+        "--amount", "10.0",
+        "--from", "1",
+        "--to", "2",
+    ]);
+    assert!(cli.is_ok(), "transfer-stake with all required args should parse");
+}
+
+#[test]
+fn parse_stake_transfer_stake_no_dest() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "stake", "transfer-stake",
+        "--amount", "10.0",
+        "--from", "1",
+        "--to", "2",
+    ]);
+    assert!(cli.is_err(), "transfer-stake without dest should fail");
+}
+
+#[test]
+fn parse_stake_transfer_stake_no_amount() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "stake", "transfer-stake",
+        "--dest", "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+        "--from", "1",
+        "--to", "2",
+    ]);
+    assert!(cli.is_err(), "transfer-stake without amount should fail");
+}
+
+#[test]
+fn parse_stake_transfer_stake_optional_hotkey() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "stake", "transfer-stake",
+        "--dest", "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+        "--amount", "10.0",
+        "--from", "1",
+        "--to", "2",
+        "--hotkey", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(cli.is_ok(), "transfer-stake with --hotkey should parse");
+}
+
+// ──── Serve batch-axon CLI parsing ────
+
+#[test]
+fn parse_serve_batch_axon_with_file() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "serve", "batch-axon",
+        "--file", "/tmp/axons.json",
+    ]);
+    assert!(cli.is_ok(), "batch-axon with --file should parse");
+}
+
+#[test]
+fn parse_serve_batch_axon_no_file_arg() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "serve", "batch-axon",
+    ]);
+    assert!(cli.is_err(), "batch-axon without --file should fail");
+}
+
+// ──── Serve axon port boundary tests ────
+
+#[test]
+fn parse_serve_axon_port_zero_parses() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "serve", "axon",
+        "--netuid", "1",
+        "--ip", "1.2.3.4",
+        "--port", "0",
+    ]);
+    assert!(cli.is_ok(), "port 0 should parse (rejected at runtime by validate_port)");
+}
+
+#[test]
+fn parse_serve_axon_port_max_65535() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "serve", "axon",
+        "--netuid", "1",
+        "--ip", "1.2.3.4",
+        "--port", "65535",
+    ]);
+    assert!(cli.is_ok(), "max port 65535 should parse");
+}
+
+#[test]
+fn parse_serve_axon_port_65536_overflow() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "serve", "axon",
+        "--netuid", "1",
+        "--ip", "1.2.3.4",
+        "--port", "65536",
+    ]);
+    assert!(cli.is_err(), "port 65536 should overflow u16");
+}
+
+// ──── Additional global flags edge cases ────
+
+#[test]
+fn parse_balance_ss58_address() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "balance",
+        "--address", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(cli.is_ok(), "balance with valid address should parse");
+}
+
+#[test]
+fn parse_balance_watch_30s() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "balance",
+        "--watch", "30",
+    ]);
+    assert!(cli.is_ok(), "balance with --watch interval should parse");
+}
+
+#[test]
+fn parse_balance_at_specific_block() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "balance",
+        "--at-block", "1000000",
+    ]);
+    assert!(cli.is_ok(), "balance with --at-block should parse");
+}
+
+#[test]
+fn parse_global_timeout_30() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--timeout", "30", "balance",
+    ]);
+    assert!(cli.is_ok(), "global --timeout flag should parse");
+}
+
+#[test]
+fn parse_global_log_file() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--log-file", "/tmp/agcli.log", "balance",
+    ]);
+    assert!(cli.is_ok(), "global --log-file flag should parse");
+}
+
+#[test]
+fn parse_global_best_endpoint() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--best", "balance",
+    ]);
+    assert!(cli.is_ok(), "global --best flag should parse");
+}
+
+#[test]
+fn parse_global_debug_mode() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--debug", "balance",
+    ]);
+    assert!(cli.is_ok(), "global --debug flag should parse");
+}
+
+#[test]
+fn parse_proxy_list_ss58_address() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "proxy", "list",
+        "--address", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(cli.is_ok(), "proxy list with --address should parse");
+}
+
+#[test]
+fn parse_proxy_create_pure_any() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "proxy", "create-pure",
+        "--proxy-type", "Any",
+    ]);
+    assert!(cli.is_ok(), "proxy create-pure should parse");
+}
+
+#[test]
+fn parse_proxy_kill_pure_full_args() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "proxy", "kill-pure",
+        "--spawner", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        "--proxy-type", "Any",
+        "--index", "0",
+        "--height", "100",
+        "--ext-index", "1",
+    ]);
+    assert!(cli.is_ok(), "proxy kill-pure with all required args should parse");
+}

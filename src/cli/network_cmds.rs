@@ -245,6 +245,7 @@ pub(super) async fn handle_swap(cmd: SwapCommands, client: &Client, ctx: &Ctx<'_
     let (wallet_dir, wallet_name, password) = (ctx.wallet_dir, ctx.wallet_name, ctx.password);
     match cmd {
         SwapCommands::Hotkey { new_hotkey } => {
+            validate_ss58(&new_hotkey, "new hotkey")?;
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
             unlock_coldkey(&mut wallet, password)?;
             let old_hotkey = match wallet.hotkey_ss58().map(|s| s.to_string()) {
@@ -271,6 +272,7 @@ pub(super) async fn handle_swap(cmd: SwapCommands, client: &Client, ctx: &Ctx<'_
             Ok(())
         }
         SwapCommands::Coldkey { new_coldkey } => {
+            validate_ss58(&new_coldkey, "new coldkey")?;
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
             unlock_coldkey(&mut wallet, password)?;
             tracing::info!(new_coldkey = %crate::utils::short_ss58(&new_coldkey), "Scheduling coldkey swap");
@@ -955,6 +957,7 @@ pub(super) async fn handle_serve(cmd: ServeCommands, client: &Client, ctx: &Ctx<
             version,
         } => {
             let ip_u128 = crate::cli::helpers::validate_ipv4(&ip)?;
+            crate::cli::helpers::validate_port(port, "axon")?;
             let (pair, _hk) =
                 unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, None, password)?;
             let axon = crate::types::chain_data::AxonInfo {
@@ -974,31 +977,22 @@ pub(super) async fn handle_serve(cmd: ServeCommands, client: &Client, ctx: &Ctx<
             Ok(())
         }
         ServeCommands::BatchAxon { file } => {
-            let (pair, _hk) =
-                unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, None, password)?;
             let content = std::fs::read_to_string(&file)
                 .map_err(|e| anyhow::anyhow!("Failed to read batch axon file '{}': {}", file, e))?;
-            let entries: Vec<serde_json::Value> = serde_json::from_str(&content)
-                .map_err(|e| anyhow::anyhow!("Invalid JSON in '{}': {}", file, e))?;
+            // Validate entire JSON upfront before unlocking wallet or submitting anything
+            let entries = crate::cli::helpers::validate_batch_axon_json(&content)?;
+            let (pair, _hk) =
+                unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, None, password)?;
 
             println!("Batch serving {} axon updates", entries.len());
             for (i, entry) in entries.iter().enumerate() {
-                let netuid = entry["netuid"]
-                    .as_u64()
-                    .ok_or_else(|| anyhow::anyhow!("Entry {}: missing 'netuid'", i))?
-                    as u16;
-                let ip = entry["ip"]
-                    .as_str()
-                    .ok_or_else(|| anyhow::anyhow!("Entry {}: missing 'ip'", i))?;
-                let port = entry["port"]
-                    .as_u64()
-                    .ok_or_else(|| anyhow::anyhow!("Entry {}: missing 'port'", i))?
-                    as u16;
+                let netuid = entry["netuid"].as_u64().unwrap() as u16;
+                let ip = entry["ip"].as_str().unwrap();
+                let port = entry["port"].as_u64().unwrap() as u16;
                 let protocol = entry["protocol"].as_u64().unwrap_or(4) as u8;
                 let version = entry["version"].as_u64().unwrap_or(0) as u32;
 
-                let ip_u128 = crate::cli::helpers::validate_ipv4(ip)
-                    .map_err(|e| anyhow::anyhow!("Entry {}: {}", i, e))?;
+                let ip_u128 = crate::cli::helpers::validate_ipv4(ip)?;
 
                 let axon = crate::types::chain_data::AxonInfo {
                     block: 0,
@@ -1055,6 +1049,7 @@ pub(super) async fn handle_proxy(cmd: ProxyCommands, client: &Client, ctx: &Ctx<
             proxy_type,
             delay,
         } => {
+            validate_ss58(&delegate, "delegate")?;
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
             unlock_coldkey(&mut wallet, password)?;
             let verb = if adding { "Adding" } else { "Removing" };
@@ -1108,6 +1103,7 @@ pub(super) async fn handle_proxy(cmd: ProxyCommands, client: &Client, ctx: &Ctx<
             height,
             ext_index,
         } => {
+            validate_ss58(&spawner, "spawner")?;
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
             unlock_coldkey(&mut wallet, password)?;
             println!(

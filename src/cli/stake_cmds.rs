@@ -526,6 +526,7 @@ pub async fn handle_stake(cmd: StakeCommands, client: &Client, ctx: &Ctx<'_>) ->
             to,
             hotkey,
         } => {
+            validate_ss58(&dest, "destination")?;
             validate_amount(amount, "transfer stake amount")?;
             let (pair, hk) =
                 unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, hotkey, password)?;

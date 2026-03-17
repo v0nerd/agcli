@@ -1397,3 +1397,324 @@ fn validate_ipv4_rejects_hostname() {
     assert!(validate_ipv4("example.com").is_err());
     assert!(validate_ipv4("localhost").is_err());
 }
+
+// ── validate_ss58 ──
+
+use agcli::cli::helpers::validate_ss58;
+
+#[test]
+fn validate_ss58_valid_alice() {
+    assert!(validate_ss58("5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY", "test").is_ok());
+}
+
+#[test]
+fn validate_ss58_valid_bob() {
+    assert!(validate_ss58("5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty", "test").is_ok());
+}
+
+#[test]
+fn validate_ss58_empty_rejects() {
+    let err = validate_ss58("", "destination").unwrap_err().to_string();
+    assert!(err.contains("empty"), "msg: {}", err);
+    assert!(err.contains("destination"), "should include label: {}", err);
+}
+
+#[test]
+fn validate_ss58_whitespace_only_rejects() {
+    assert!(validate_ss58("   ", "dest").is_err());
+}
+
+#[test]
+fn validate_ss58_too_short_rejects() {
+    let err = validate_ss58("5Grw", "hotkey").unwrap_err().to_string();
+    assert!(err.contains("too short"), "msg: {}", err);
+}
+
+#[test]
+fn validate_ss58_too_long_rejects() {
+    let long = "5".to_string() + &"a".repeat(60);
+    let err = validate_ss58(&long, "test").unwrap_err().to_string();
+    assert!(err.contains("too long"), "msg: {}", err);
+}
+
+#[test]
+fn validate_ss58_ethereum_address_rejects() {
+    let err = validate_ss58("0x742d35Cc6634C0532925a3b844Bc9e7595f2bD18", "destination").unwrap_err().to_string();
+    assert!(err.contains("Ethereum") || err.contains("hex"), "should detect 0x prefix: {}", err);
+}
+
+#[test]
+fn validate_ss58_uppercase_0x_rejects() {
+    let err = validate_ss58("0X742d35Cc6634C0532925a3b844Bc9e7595f2bD18", "test").unwrap_err().to_string();
+    assert!(err.contains("Ethereum") || err.contains("hex"), "msg: {}", err);
+}
+
+#[test]
+fn validate_ss58_contains_spaces_rejects() {
+    let err = validate_ss58("5Grwva EF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY", "test").unwrap_err().to_string();
+    assert!(err.contains("whitespace"), "msg: {}", err);
+}
+
+#[test]
+fn validate_ss58_tabs_rejects() {
+    assert!(validate_ss58("5Grwva\tEF5z", "test").is_err());
+}
+
+#[test]
+fn validate_ss58_invalid_base58_chars_rejects() {
+    // 'O' is not in Base58 (0, I, O, l are excluded)
+    let err = validate_ss58("5GrwvaOF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY", "test").unwrap_err().to_string();
+    assert!(err.contains("Base58") || err.contains("'O'"), "msg: {}", err);
+}
+
+#[test]
+fn validate_ss58_zero_char_rejects() {
+    // '0' is not valid Base58
+    let err = validate_ss58("50rwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY", "test").unwrap_err().to_string();
+    assert!(err.contains("Base58") || err.contains("'0'"), "msg: {}", err);
+}
+
+#[test]
+fn validate_ss58_lowercase_l_rejects() {
+    // 'l' is not valid Base58
+    let err = validate_ss58("5GrwvalF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY", "test").unwrap_err().to_string();
+    assert!(err.contains("Base58") || err.contains("'l'"), "msg: {}", err);
+}
+
+#[test]
+fn validate_ss58_bad_checksum_rejects() {
+    // Change last char to invalidate checksum
+    let err = validate_ss58("5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQZ", "test").unwrap_err().to_string();
+    assert!(err.contains("checksum"), "msg: {}", err);
+}
+
+#[test]
+fn validate_ss58_random_string_rejects() {
+    assert!(validate_ss58("notanaddressatall12345678901234567890123456", "test").is_err());
+}
+
+#[test]
+fn validate_ss58_label_in_error() {
+    let err = validate_ss58("", "my-delegate").unwrap_err().to_string();
+    assert!(err.contains("my-delegate"), "error should include label: {}", err);
+}
+
+#[test]
+fn validate_ss58_leading_trailing_whitespace_trimmed() {
+    // Trimmed version of Alice should be valid
+    assert!(validate_ss58(" 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY ", "test").is_ok());
+}
+
+// ── validate_password_strength ──
+
+use agcli::cli::helpers::validate_password_strength;
+
+#[test]
+fn validate_password_strength_strong_no_panic() {
+    // Should not panic — function only prints warnings
+    validate_password_strength("Str0ng!Pass#2024");
+}
+
+#[test]
+fn validate_password_strength_short_no_panic() {
+    validate_password_strength("ab");
+}
+
+#[test]
+fn validate_password_strength_empty_no_panic() {
+    validate_password_strength("");
+}
+
+#[test]
+fn validate_password_strength_common_no_panic() {
+    validate_password_strength("password");
+    validate_password_strength("12345678");
+    validate_password_strength("qwerty");
+}
+
+#[test]
+fn validate_password_strength_single_type_no_panic() {
+    validate_password_strength("abcdefgh");
+    validate_password_strength("12345678");
+    validate_password_strength("ABCDEFGH");
+}
+
+#[test]
+fn validate_password_strength_mixed_no_panic() {
+    validate_password_strength("aB1!");
+}
+
+// ── validate_port ──
+
+use agcli::cli::helpers::validate_port;
+
+#[test]
+fn validate_port_normal_ok() {
+    assert!(validate_port(8091, "axon").is_ok());
+    assert!(validate_port(443, "https").is_ok());
+    assert!(validate_port(65535, "max").is_ok());
+    assert!(validate_port(1024, "user").is_ok());
+}
+
+#[test]
+fn validate_port_zero_rejects() {
+    let err = validate_port(0, "axon").unwrap_err().to_string();
+    assert!(err.contains("0"), "msg: {}", err);
+    assert!(err.contains("axon"), "should include label: {}", err);
+}
+
+#[test]
+fn validate_port_privileged_warns_but_ok() {
+    // Ports < 1024 should succeed but print a warning
+    assert!(validate_port(80, "http").is_ok());
+    assert!(validate_port(1, "min").is_ok());
+    assert!(validate_port(22, "ssh").is_ok());
+}
+
+#[test]
+fn validate_port_one_ok() {
+    assert!(validate_port(1, "test").is_ok());
+}
+
+// ── validate_netuid ──
+
+use agcli::cli::helpers::validate_netuid;
+
+#[test]
+fn validate_netuid_normal_ok() {
+    assert!(validate_netuid(1).is_ok());
+    assert!(validate_netuid(100).is_ok());
+    assert!(validate_netuid(65535).is_ok());
+}
+
+#[test]
+fn validate_netuid_zero_rejects() {
+    let err = validate_netuid(0).unwrap_err().to_string();
+    assert!(err.contains("0") || err.contains("Root"), "msg: {}", err);
+}
+
+// ── validate_batch_axon_json ──
+
+use agcli::cli::helpers::validate_batch_axon_json;
+
+#[test]
+fn validate_batch_axon_json_valid_single() {
+    let json = r#"[{"netuid": 1, "ip": "1.2.3.4", "port": 8091}]"#;
+    let entries = validate_batch_axon_json(json).unwrap();
+    assert_eq!(entries.len(), 1);
+}
+
+#[test]
+fn validate_batch_axon_json_valid_multiple() {
+    let json = r#"[
+        {"netuid": 1, "ip": "1.2.3.4", "port": 8091},
+        {"netuid": 2, "ip": "5.6.7.8", "port": 9092, "protocol": 4, "version": 1}
+    ]"#;
+    let entries = validate_batch_axon_json(json).unwrap();
+    assert_eq!(entries.len(), 2);
+}
+
+#[test]
+fn validate_batch_axon_json_valid_with_all_fields() {
+    let json = r#"[{"netuid": 1, "ip": "1.2.3.4", "port": 8091, "protocol": 6, "version": 42}]"#;
+    assert!(validate_batch_axon_json(json).is_ok());
+}
+
+#[test]
+fn validate_batch_axon_json_empty_array_rejects() {
+    let err = validate_batch_axon_json("[]").unwrap_err().to_string();
+    assert!(err.contains("empty"), "msg: {}", err);
+}
+
+#[test]
+fn validate_batch_axon_json_not_array_rejects() {
+    assert!(validate_batch_axon_json(r#"{"netuid": 1}"#).is_err());
+}
+
+#[test]
+fn validate_batch_axon_json_invalid_json_rejects() {
+    let err = validate_batch_axon_json("not json").unwrap_err().to_string();
+    assert!(err.contains("Invalid"), "msg: {}", err);
+}
+
+#[test]
+fn validate_batch_axon_json_missing_netuid_rejects() {
+    let err = validate_batch_axon_json(r#"[{"ip": "1.2.3.4", "port": 8091}]"#)
+        .unwrap_err().to_string();
+    assert!(err.contains("netuid"), "msg: {}", err);
+}
+
+#[test]
+fn validate_batch_axon_json_missing_ip_rejects() {
+    let err = validate_batch_axon_json(r#"[{"netuid": 1, "port": 8091}]"#)
+        .unwrap_err().to_string();
+    assert!(err.contains("ip"), "msg: {}", err);
+}
+
+#[test]
+fn validate_batch_axon_json_missing_port_rejects() {
+    let err = validate_batch_axon_json(r#"[{"netuid": 1, "ip": "1.2.3.4"}]"#)
+        .unwrap_err().to_string();
+    assert!(err.contains("port"), "msg: {}", err);
+}
+
+#[test]
+fn validate_batch_axon_json_netuid_not_number_rejects() {
+    let err = validate_batch_axon_json(r#"[{"netuid": "one", "ip": "1.2.3.4", "port": 8091}]"#)
+        .unwrap_err().to_string();
+    assert!(err.contains("netuid"), "msg: {}", err);
+}
+
+#[test]
+fn validate_batch_axon_json_ip_not_string_rejects() {
+    let err = validate_batch_axon_json(r#"[{"netuid": 1, "ip": 123, "port": 8091}]"#)
+        .unwrap_err().to_string();
+    assert!(err.contains("ip"), "msg: {}", err);
+}
+
+#[test]
+fn validate_batch_axon_json_port_zero_rejects() {
+    let err = validate_batch_axon_json(r#"[{"netuid": 1, "ip": "1.2.3.4", "port": 0}]"#)
+        .unwrap_err().to_string();
+    assert!(err.contains("port"), "msg: {}", err);
+}
+
+#[test]
+fn validate_batch_axon_json_port_too_large_rejects() {
+    let err = validate_batch_axon_json(r#"[{"netuid": 1, "ip": "1.2.3.4", "port": 70000}]"#)
+        .unwrap_err().to_string();
+    assert!(err.contains("port"), "msg: {}", err);
+}
+
+#[test]
+fn validate_batch_axon_json_netuid_too_large_rejects() {
+    let err = validate_batch_axon_json(r#"[{"netuid": 100000, "ip": "1.2.3.4", "port": 8091}]"#)
+        .unwrap_err().to_string();
+    assert!(err.contains("netuid"), "msg: {}", err);
+}
+
+#[test]
+fn validate_batch_axon_json_protocol_overflow_rejects() {
+    let err = validate_batch_axon_json(r#"[{"netuid": 1, "ip": "1.2.3.4", "port": 8091, "protocol": 256}]"#)
+        .unwrap_err().to_string();
+    assert!(err.contains("protocol"), "msg: {}", err);
+}
+
+#[test]
+fn validate_batch_axon_json_invalid_ip_rejects() {
+    let err = validate_batch_axon_json(r#"[{"netuid": 1, "ip": "127.0.0.1", "port": 8091}]"#)
+        .unwrap_err().to_string();
+    assert!(err.contains("loopback") || err.contains("IP") || err.contains("ip"), "msg: {}", err);
+}
+
+#[test]
+fn validate_batch_axon_json_entry_not_object_rejects() {
+    let err = validate_batch_axon_json(r#"[42]"#).unwrap_err().to_string();
+    assert!(err.contains("not a JSON object"), "msg: {}", err);
+}
+
+#[test]
+fn validate_batch_axon_json_string_entry_rejects() {
+    let err = validate_batch_axon_json(r#"["hello"]"#).unwrap_err().to_string();
+    assert!(err.contains("not a JSON object"), "msg: {}", err);
+}

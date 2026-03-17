@@ -349,6 +349,206 @@ pub fn validate_delegate_take(take: f64) -> Result<()> {
     Ok(())
 }
 
+/// Validate an SS58 address string. Returns Ok(()) if valid, or a helpful error message.
+/// Use this to validate user-supplied addresses (--dest, --delegate, --hotkey, --spawner, etc.)
+/// before submitting them to the chain.
+pub fn validate_ss58(address: &str, label: &str) -> Result<()> {
+    let trimmed = address.trim();
+    if trimmed.is_empty() {
+        anyhow::bail!(
+            "Invalid {}: address cannot be empty.\n  Tip: provide a valid Bittensor SS58 address (48 characters, starts with '5').",
+            label
+        );
+    }
+    // Quick sanity checks before the expensive crypto verification
+    if trimmed.len() < 10 {
+        anyhow::bail!(
+            "Invalid {} address '{}' — too short. Bittensor SS58 addresses are 48 characters starting with '5'.",
+            label, trimmed
+        );
+    }
+    if trimmed.len() > 60 {
+        anyhow::bail!(
+            "Invalid {} address '{}' — too long ({} chars). Bittensor SS58 addresses are 48 characters.",
+            label, &trimmed[..20], trimmed.len()
+        );
+    }
+    // Check for common mistakes: 0x prefix (Ethereum address), spaces, non-base58 chars
+    if trimmed.starts_with("0x") || trimmed.starts_with("0X") {
+        anyhow::bail!(
+            "Invalid {} address: '{}' looks like an Ethereum/hex address.\n  Tip: Bittensor uses SS58 addresses (start with '5'). Convert at https://ss58.org or use `agcli wallet show`.",
+            label, trimmed
+        );
+    }
+    if trimmed.contains(' ') || trimmed.contains('\t') {
+        anyhow::bail!(
+            "Invalid {} address: contains whitespace. Remove any spaces or tabs from the address.",
+            label
+        );
+    }
+    // Base58 character set check (1-9, A-H, J-N, P-Z, a-k, m-z — no 0, I, O, l)
+    if let Some(bad) = trimmed.chars().find(|c| {
+        !matches!(c, '1'..='9' | 'A'..='H' | 'J'..='N' | 'P'..='Z' | 'a'..='k' | 'm'..='z')
+    }) {
+        anyhow::bail!(
+            "Invalid {} address '{}': character '{}' is not valid Base58.\n  Tip: SS58 addresses use Base58 encoding (no 0, I, O, or l).",
+            label, crate::utils::short_ss58(trimmed), bad
+        );
+    }
+    // Full cryptographic verification via sp_core
+    use sp_core::{crypto::Ss58Codec, sr25519};
+    sr25519::Public::from_ss58check(trimmed).map_err(|_| {
+        anyhow::anyhow!(
+            "Invalid {} address '{}': checksum verification failed.\n  Tip: double-check the address. Use `agcli wallet show` to get your correct address.",
+            label, crate::utils::short_ss58(trimmed)
+        )
+    })?;
+    Ok(())
+}
+
+/// Validate password strength for wallet creation. Returns Ok(()) always, but prints
+/// warnings to stderr for weak passwords. Does NOT reject weak passwords — just warns.
+pub fn validate_password_strength(password: &str) {
+    if password.len() < 8 {
+        eprintln!(
+            "Warning: password is only {} characters. Consider using at least 8 characters for better security.",
+            password.len()
+        );
+    }
+    if password.len() < 4 {
+        eprintln!(
+            "Warning: password is very short ({} chars). Your wallet encryption may be easily brute-forced.",
+            password.len()
+        );
+    }
+    let has_upper = password.chars().any(|c| c.is_ascii_uppercase());
+    let has_lower = password.chars().any(|c| c.is_ascii_lowercase());
+    let has_digit = password.chars().any(|c| c.is_ascii_digit());
+    let has_special = password.chars().any(|c| !c.is_ascii_alphanumeric());
+    let variety = [has_upper, has_lower, has_digit, has_special]
+        .iter()
+        .filter(|&&b| b)
+        .count();
+    if variety < 2 && password.len() >= 4 {
+        eprintln!(
+            "Warning: password uses only one character type. Mix uppercase, lowercase, numbers, and symbols for stronger security."
+        );
+    }
+    // Check for common weak passwords
+    let common = [
+        "password", "12345678", "123456789", "1234567890", "qwerty",
+        "abc123", "letmein", "welcome", "monkey", "dragon",
+        "master", "login", "princess", "football", "shadow",
+    ];
+    if common.contains(&password.to_lowercase().as_str()) {
+        eprintln!(
+            "Warning: this is a commonly used password. Choose something unique to protect your wallet."
+        );
+    }
+}
+
+/// Validate a port number is in the valid range [1, 65535].
+pub fn validate_port(port: u16, label: &str) -> Result<()> {
+    if port == 0 {
+        anyhow::bail!(
+            "Invalid {} port: 0. Port must be between 1 and 65535.\n  Tip: common ports are 8091 (axon) and 443 (HTTPS).",
+            label
+        );
+    }
+    if port < 1024 {
+        eprintln!(
+            "Warning: {} port {} is a privileged port (< 1024). You may need root access to bind to it.",
+            label, port
+        );
+    }
+    Ok(())
+}
+
+/// Validate a netuid is in a reasonable range for the Bittensor network.
+pub fn validate_netuid(netuid: u16) -> Result<()> {
+    if netuid == 0 {
+        anyhow::bail!(
+            "Invalid netuid: 0. Root network (netuid 0) is not a user subnet.\n  Tip: user subnets start at netuid 1."
+        );
+    }
+    Ok(())
+}
+
+/// Validate a batch-axon JSON file structure. Returns a vec of errors found.
+/// Each entry should have: netuid (u16), ip (valid IPv4), port (u16).
+/// Optional fields: protocol (u8, default 4), version (u32, default 0).
+pub fn validate_batch_axon_json(json_str: &str) -> Result<Vec<serde_json::Value>> {
+    let entries: Vec<serde_json::Value> = serde_json::from_str(json_str).map_err(|e| {
+        anyhow::anyhow!(
+            "Invalid batch-axon JSON: {}.\n  Expected format: [{{\"netuid\": 1, \"ip\": \"1.2.3.4\", \"port\": 8091}}]",
+            e
+        )
+    })?;
+    if entries.is_empty() {
+        anyhow::bail!(
+            "Batch-axon JSON is empty. Provide at least one entry.\n  Format: [{{\"netuid\": 1, \"ip\": \"1.2.3.4\", \"port\": 8091}}]"
+        );
+    }
+    for (i, entry) in entries.iter().enumerate() {
+        let obj = entry.as_object().ok_or_else(|| {
+            anyhow::anyhow!("Batch-axon entry {} is not a JSON object. Each entry must be {{\"netuid\": N, \"ip\": \"...\", \"port\": N}}.", i)
+        })?;
+        // Required: netuid
+        let netuid = obj.get("netuid").ok_or_else(|| {
+            anyhow::anyhow!("Batch-axon entry {}: missing required field 'netuid'.", i)
+        })?;
+        let netuid_val = netuid.as_u64().ok_or_else(|| {
+            anyhow::anyhow!("Batch-axon entry {}: 'netuid' must be a positive integer (got {}).", i, netuid)
+        })?;
+        if netuid_val > 65535 {
+            anyhow::bail!("Batch-axon entry {}: 'netuid' {} exceeds maximum (65535).", i, netuid_val);
+        }
+        // Required: ip
+        let ip = obj.get("ip").ok_or_else(|| {
+            anyhow::anyhow!("Batch-axon entry {}: missing required field 'ip'.", i)
+        })?;
+        let ip_str = ip.as_str().ok_or_else(|| {
+            anyhow::anyhow!("Batch-axon entry {}: 'ip' must be a string (got {}).", i, ip)
+        })?;
+        validate_ipv4(ip_str).map_err(|e| {
+            anyhow::anyhow!("Batch-axon entry {}: {}", i, e)
+        })?;
+        // Required: port
+        let port = obj.get("port").ok_or_else(|| {
+            anyhow::anyhow!("Batch-axon entry {}: missing required field 'port'.", i)
+        })?;
+        let port_val = port.as_u64().ok_or_else(|| {
+            anyhow::anyhow!("Batch-axon entry {}: 'port' must be a positive integer (got {}).", i, port)
+        })?;
+        if port_val == 0 || port_val > 65535 {
+            anyhow::bail!("Batch-axon entry {}: 'port' {} is out of range (1–65535).", i, port_val);
+        }
+        // Optional: protocol (u8, default 4)
+        if let Some(proto) = obj.get("protocol") {
+            let proto_val = proto.as_u64().ok_or_else(|| {
+                anyhow::anyhow!("Batch-axon entry {}: 'protocol' must be a number (got {}).", i, proto)
+            })?;
+            if proto_val > 255 {
+                anyhow::bail!("Batch-axon entry {}: 'protocol' {} exceeds maximum (255).", i, proto_val);
+            }
+        }
+        // Optional: version (u32)
+        if let Some(ver) = obj.get("version") {
+            ver.as_u64().ok_or_else(|| {
+                anyhow::anyhow!("Batch-axon entry {}: 'version' must be a number (got {}).", i, ver)
+            })?;
+        }
+        // Warn on unknown fields
+        let known = ["netuid", "ip", "port", "protocol", "version"];
+        for key in obj.keys() {
+            if !known.contains(&key.as_str()) {
+                eprintln!("Warning: batch-axon entry {}: unknown field '{}' (ignored).", i, key);
+            }
+        }
+    }
+    Ok(entries)
+}
+
 /// Check per-subnet spending limit from config.
 /// Returns Ok if no limit set or amount is within limit, Err otherwise.
 pub fn check_spending_limit(netuid: u16, tao_amount: f64) -> Result<()> {
@@ -481,6 +681,7 @@ pub fn resolve_hotkey_ss58(
     hotkey_name: &str,
 ) -> Result<String> {
     if let Some(hk) = hotkey_arg {
+        validate_ss58(&hk, "hotkey")?;
         return Ok(hk);
     }
     wallet.load_hotkey(hotkey_name)?;

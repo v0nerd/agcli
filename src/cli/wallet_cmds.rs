@@ -22,6 +22,7 @@ pub async fn handle_wallet(
             crate::cli::helpers::validate_name(&name, "wallet")?;
             let password =
                 crate::cli::helpers::require_password(cmd_password, global_password, true)?;
+            crate::cli::helpers::validate_password_strength(&password);
             let (wallet, coldkey_mnemonic, hotkey_mnemonic) =
                 Wallet::create(wallet_dir, &name, &password, "default")?;
             if output.is_json() {
@@ -198,6 +199,7 @@ pub async fn handle_wallet(
             let mnemonic = crate::cli::helpers::require_mnemonic(cmd_mnemonic)?;
             let password =
                 crate::cli::helpers::require_password(cmd_password, global_password, true)?;
+            crate::cli::helpers::validate_password_strength(&password);
             let wallet = Wallet::import_from_mnemonic(wallet_dir, &name, &mnemonic, &password)?;
             if output.is_json() {
                 crate::cli::helpers::print_json(&serde_json::json!({
@@ -219,6 +221,7 @@ pub async fn handle_wallet(
             let mnemonic = crate::cli::helpers::require_mnemonic(cmd_mnemonic)?;
             let password =
                 crate::cli::helpers::require_password(cmd_password, global_password, true)?;
+            crate::cli::helpers::validate_password_strength(&password);
             let wallet = Wallet::import_from_mnemonic(wallet_dir, "default", &mnemonic, &password)?;
             if output.is_json() {
                 crate::cli::helpers::print_json(&serde_json::json!({
